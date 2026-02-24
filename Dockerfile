@@ -5,16 +5,11 @@ WORKDIR /app
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy dependency files first for better layer caching
+# Copy everything needed for install
 COPY pyproject.toml uv.lock ./
-
-# Install dependencies (no dev deps in production)
-RUN uv sync --frozen --no-dev --no-editable
-
-# Copy source code
 COPY src/ src/
 
-# Install the project itself
+# Install dependencies (no dev deps in production)
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
