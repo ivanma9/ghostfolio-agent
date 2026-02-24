@@ -270,6 +270,7 @@ dependencies = [
     { name = "langsmith" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "structlog" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -294,6 +295,7 @@ requires-dist = [
     { name = "langsmith", specifier = ">=0.3" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pydantic-settings", specifier = ">=2.7" },
+    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings>=2.7",
     "structlog>=24.4",
     "langsmith>=0.3",
+    "python-dotenv>=1.0",
 ]
 
 [dependency-groups]
