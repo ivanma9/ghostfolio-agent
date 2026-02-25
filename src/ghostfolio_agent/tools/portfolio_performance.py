@@ -1,5 +1,8 @@
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 PERIOD_MAP = {
     "1d": "1d",
@@ -19,7 +22,11 @@ def create_portfolio_performance_tool(client: GhostfolioClient):
     async def portfolio_performance(period: str = "1m") -> str:
         """Get portfolio performance over a time period. Supported periods: 1d, 1w, 1m, 3m, 6m, 1y, ytd, all. Use this when the user asks about returns, performance, or how their portfolio has done."""
         range_value = PERIOD_MAP.get(period.lower(), "1m")
-        data = await client.get_portfolio_performance(range_value)
+        try:
+            data = await client.get_portfolio_performance(range_value)
+        except Exception as e:
+            logger.error("portfolio_performance_failed", error=str(e), period=period)
+            return "Sorry, I couldn't fetch your portfolio performance right now. Please try again later."
 
         perf = data.get("performance", {})
         net_perf = perf.get("netPerformance", 0) or 0

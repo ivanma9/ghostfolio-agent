@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ghostfolio-db
+      POSTGRES_USER: ghostfolio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghostfolio -d ghostfolio-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ghostfolio:
+    image: ghostfolio/ghostfolio:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${GHOSTFOLIO_PORT:-3333}:3333"
+    environment:
+      DATABASE_URL: "postgresql://ghostfolio:${POSTGRES_PASSWORD}@postgres:5432/ghostfolio-db?sslmode=prefer"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ACCESS_TOKEN_SALT: ${ACCESS_TOKEN_SALT}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SECRET: ${SECRET}
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3333/api/v1/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  agent:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      ghostfolio:
+        condition: service_healthy
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GHOSTFOLIO_BASE_URL: http://ghostfolio:3333
+      GHOSTFOLIO_ACCESS_TOKEN: ${GHOSTFOLIO_ACCESS_TOKEN}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-ghostfolio-agent}
+      AGENT_PORT: "8000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DOMAIN: ${DOMAIN:-}
+
+volumes:
+  postgres_data:

@@ -1,3 +1,12 @@
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-build
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python backend
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -11,6 +20,9 @@ COPY src/ src/
 
 # Install dependencies (no dev deps in production)
 RUN uv sync --frozen --no-dev
+
+# Copy built frontend assets
+COPY --from=frontend-build /frontend/dist /app/static
 
 EXPOSE 8000
 

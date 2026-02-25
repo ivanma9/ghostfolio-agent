@@ -1,12 +1,18 @@
 from langgraph.prebuilt import create_react_agent
 from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import SystemMessage
+
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.tools import create_tools
 
 SYSTEM_PROMPT = """You are a helpful financial assistant for Ghostfolio, a portfolio tracking application. You help users understand their investment portfolio, transactions, and market data.
 
 Guidelines:
-- Always use the available tools to fetch real data before answering questions about the user's portfolio.
+- Be selective with tool calls. Only call the tools that directly answer the user's question.
+  - For general info about a symbol (e.g., "tell me about NVDA"): use symbol_lookup only.
+  - For portfolio questions (e.g., "how is my portfolio doing?"): use portfolio_summary or portfolio_performance.
+  - For questions that combine both (e.g., "should I buy more AAPL?"): use symbol_lookup + portfolio_summary.
+  - Do NOT call portfolio_summary or transaction_history unless the user is asking about their own holdings or trades.
 - Present financial data clearly with proper formatting (dollar amounts, percentages).
 - If you're unsure about something, say so rather than guessing.
 - Never provide specific investment advice or recommendations to buy/sell securities.
@@ -22,14 +28,50 @@ Available tools:
 - paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio
 """
 
+def _make_context_trimmer(max_messages: int = 40):
+    """Create a pre_model_hook that trims messages to fit context window."""
+
+    def trim_context(state):
+        messages = state["messages"]
+
+        if len(messages) <= max_messages:
+            return {"llm_input_messages": messages}
+
+        # Keep the system message (if first) + last N messages
+        trimmed = []
+        if messages and isinstance(messages[0], SystemMessage):
+            trimmed.append(messages[0])
+            candidates = messages[1:]
+        else:
+            candidates = messages
+
+        tail = candidates[-(max_messages - len(trimmed)) :]
+
+        # Don't start on an orphaned ToolMessage (needs preceding AIMessage)
+        while tail and hasattr(tail[0], "tool_call_id"):
+            tail = tail[1:]
+
+        trimmed.extend(tail)
+        return {"llm_input_messages": trimmed}
+
+    return trim_context
+
 
 def create_agent(
     client: GhostfolioClient,
     api_key: str,
     model_name: str = "claude-sonnet-4-6",
+    checkpointer=None,
+    max_context_messages: int = 40,
 ):
     """Create a LangGraph agent with Ghostfolio tools."""
     llm = ChatAnthropic(model=model_name, api_key=api_key, temperature=0, max_tokens=4096)
     tools = create_tools(client)
-    agent = create_react_agent(llm, tools, prompt=SYSTEM_PROMPT)
+    agent = create_react_agent(
+        llm,
+        tools,
+        prompt=SYSTEM_PROMPT,
+        pre_model_hook=_make_context_trimmer(max_context_messages),
+        checkpointer=checkpointer,
+    )
     return agent

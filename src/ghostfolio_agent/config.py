@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # App
     agent_port: int = 8000
     log_level: str = "debug"
+    domain: str = ""  # Production domain, e.g. "https://ghostfolio-agent.example.com"
+
+    # Agent memory
+    max_context_messages: int = 40
 
 
 def get_settings() -> Settings:

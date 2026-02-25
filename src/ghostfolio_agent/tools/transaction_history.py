@@ -1,13 +1,20 @@
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 
 def create_transaction_history_tool(client: GhostfolioClient):
     @tool
     async def transaction_history(symbol: str = "") -> str:
         """Get the transaction history showing all buy/sell/dividend activity. Optionally filter by symbol. Use this when the user asks about their trades, transactions, purchases, or activity."""
-        # client.get_orders() already unwraps the {"activities": [...]} envelope
-        orders = await client.get_orders()
+        try:
+            # client.get_orders() already unwraps the {"activities": [...]} envelope
+            orders = await client.get_orders()
+        except Exception as e:
+            logger.error("transaction_history_failed", error=str(e))
+            return "Sorry, I couldn't fetch your transaction history right now. Please try again later."
 
         # Each activity has a nested SymbolProfile object for the symbol
         if symbol:

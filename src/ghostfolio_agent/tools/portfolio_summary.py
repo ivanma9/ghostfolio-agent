@@ -1,12 +1,19 @@
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 
 def create_portfolio_summary_tool(client: GhostfolioClient):
     @tool
     async def portfolio_summary() -> str:
         """Get a summary of the user's portfolio including all holdings, their current values, allocations, and total portfolio value. Use this when the user asks about their portfolio, holdings, positions, or allocation."""
-        data = await client.get_portfolio_holdings()
+        try:
+            data = await client.get_portfolio_holdings()
+        except Exception as e:
+            logger.error("portfolio_summary_failed", error=str(e))
+            return "Sorry, I couldn't fetch your portfolio data right now. Please try again later."
 
         # The Ghostfolio API returns holdings as a dict keyed by symbol,
         # e.g. {"holdings": {"AAPL": {...}, "MSFT": {...}}}

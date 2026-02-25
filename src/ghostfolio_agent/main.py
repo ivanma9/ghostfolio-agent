@@ -1,7 +1,9 @@
+import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import structlog
 
 from ghostfolio_agent.config import get_settings
@@ -9,10 +11,14 @@ from ghostfolio_agent.api.chat import router as chat_router
 
 logger = structlog.get_logger()
 
+STATIC_DIR = pathlib.Path(__file__).resolve().parent.parent.parent / "static"
+
+
+settings = get_settings()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
     logger.info("starting ghostfolio-agent", port=settings.agent_port)
     yield
     logger.info("shutting down ghostfolio-agent")
@@ -23,10 +29,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+_allowed_origins = (
+    [settings.domain] if settings.domain else ["*"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,3 +47,8 @@ app.include_router(chat_router)
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# Serve frontend static files (built React app) — must come after API routes
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

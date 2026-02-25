@@ -1,12 +1,19 @@
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 
 def create_symbol_lookup_tool(client: GhostfolioClient):
     @tool
     async def symbol_lookup(query: str) -> str:
         """Look up a stock, ETF, or cryptocurrency by name or ticker symbol. Use this when the user asks about a specific security, wants to know what a ticker is, or needs current price information."""
-        data = await client.lookup_symbol(query)
+        try:
+            data = await client.lookup_symbol(query)
+        except Exception as e:
+            logger.error("symbol_lookup_failed", error=str(e), query=query)
+            return f"Sorry, I couldn't look up '{query}' right now. Please try again later."
         items = data.get("items", [])
 
         if not items:

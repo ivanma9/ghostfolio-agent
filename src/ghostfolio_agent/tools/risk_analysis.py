@@ -1,17 +1,24 @@
 import asyncio
 
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 
 def create_risk_analysis_tool(client: GhostfolioClient):
     @tool
     async def risk_analysis() -> str:
         """Analyze portfolio risk including concentration risk, sector breakdown, and currency exposure. Use this when the user asks about risk, diversification, sector allocation, or currency exposure."""
-        holdings_data, details_data = await asyncio.gather(
-            client.get_portfolio_holdings(),
-            client.get_portfolio_details(),
-        )
+        try:
+            holdings_data, details_data = await asyncio.gather(
+                client.get_portfolio_holdings(),
+                client.get_portfolio_details(),
+            )
+        except Exception as e:
+            logger.error("risk_analysis_failed", error=str(e))
+            return "Sorry, I couldn't analyze your portfolio risk right now. Please try again later."
 
         raw_holdings = holdings_data.get("holdings", {}) if isinstance(holdings_data, dict) else {}
         # holdings can be a dict keyed by symbol or a list
