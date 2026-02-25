@@ -24,6 +24,7 @@ except ImportError:
     sys.exit(1)
 
 DEFAULT_DATASET = Path(__file__).parent / "datasets" / "mvp_test_cases.json"
+FULL_DATASET = Path(__file__).parent / "datasets" / "full_eval_suite.json"
 DEFAULT_BASE_URL = "http://localhost:8000"
 
 
@@ -153,15 +154,37 @@ def main() -> None:
         default=str(DEFAULT_DATASET),
         help=f"Path to the test cases JSON file (default: {DEFAULT_DATASET})",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run the full 50-case eval suite instead of the golden-set",
+    )
+    parser.add_argument(
+        "--category",
+        default=None,
+        help="Only run test cases matching this category (e.g. happy_path, edge_case, adversarial, multi_step)",
+    )
     args = parser.parse_args()
 
-    dataset_path = Path(args.dataset)
+    # --full overrides --dataset to use the full 50-case suite
+    if args.full:
+        dataset_path = FULL_DATASET
+    else:
+        dataset_path = Path(args.dataset)
+
     if not dataset_path.exists():
         print(f"ERROR: Dataset file not found: {dataset_path}")
         sys.exit(1)
 
     with dataset_path.open() as fh:
         test_cases = json.load(fh)
+
+    # Optional category filter
+    if args.category:
+        test_cases = [tc for tc in test_cases if tc.get("category") == args.category]
+        if not test_cases:
+            print(f"ERROR: No test cases found for category '{args.category}'")
+            sys.exit(1)
 
     print(f"\nGhostfolio Agent Eval Runner")
     print(f"  API  : {args.url}")
