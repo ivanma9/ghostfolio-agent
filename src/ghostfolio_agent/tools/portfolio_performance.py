@@ -21,16 +21,18 @@ def create_portfolio_performance_tool(client: GhostfolioClient):
         range_value = PERIOD_MAP.get(period.lower(), "1m")
         data = await client.get_portfolio_performance(range_value)
 
-        net_perf = data.get("netPerformance", 0) or 0
-        net_perf_pct = (data.get("netPerformancePercentage", 0) or 0) * 100
+        perf = data.get("performance", {})
+        net_perf = perf.get("netPerformance", 0) or 0
+        net_perf_pct = (perf.get("netPerformancePercentage", 0) or 0) * 100
+        current_value = perf.get("currentNetWorth", 0) or 0
 
         chart = data.get("chart", []) or []
-        current_value = chart[-1].get("value", 0) if chart else 0
 
         lines = [
             f"Portfolio Performance ({period.upper()}):",
-            f"  Total Return:   ${net_perf:,.2f} ({net_perf_pct:+.2f}%)",
-            f"  Current Value:  ${current_value:,.2f}",
+            f"  Period: {period.upper()}",
+            f"  Total Return: ${net_perf:,.2f} ({net_perf_pct:+.2f}%)",
+            f"  Current Value: ${current_value:,.2f}",
         ]
 
         if chart:
@@ -39,12 +41,13 @@ def create_portfolio_performance_tool(client: GhostfolioClient):
             if len(chart) > 20:
                 step = len(chart) / 20
                 sampled = [chart[int(i * step)] for i in range(20)]
-                sampled.append(chart[-1])
+                if chart[-1] not in sampled:
+                    sampled.append(chart[-1])
             else:
                 sampled = chart
             for point in sampled:
                 date = point.get("date", "")
-                value = point.get("value", 0) or 0
+                value = point.get("netWorth", 0) or point.get("value", 0) or 0
                 lines.append(f"  {date}: ${value:,.2f}")
 
         return "\n".join(lines)

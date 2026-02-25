@@ -13,19 +13,25 @@ def create_risk_analysis_tool(client: GhostfolioClient):
             client.get_portfolio_details(),
         )
 
-        holdings = holdings_data.get("holdings", {}) if isinstance(holdings_data, dict) else {}
-        if not holdings:
+        raw_holdings = holdings_data.get("holdings", {}) if isinstance(holdings_data, dict) else {}
+        # holdings can be a dict keyed by symbol or a list
+        if isinstance(raw_holdings, dict):
+            holdings_list_raw = list(raw_holdings.values())
+        else:
+            holdings_list_raw = list(raw_holdings)
+
+        if not holdings_list_raw:
             return "No holdings data available."
 
         # Build flat list of holding info
         holding_list = []
-        for symbol, info in holdings.items():
+        for info in holdings_list_raw:
             if not isinstance(info, dict):
                 continue
             holding_list.append({
-                "symbol": symbol,
-                "name": info.get("name", symbol),
-                "value": info.get("value", 0) or 0,
+                "symbol": info.get("symbol", "?"),
+                "name": info.get("name", info.get("symbol", "?")),
+                "value": info.get("valueInBaseCurrency", 0) or info.get("value", 0) or 0,
                 "allocationInPercentage": (info.get("allocationInPercentage", 0) or 0) * 100,
                 "currency": info.get("currency", "UNKNOWN"),
                 "assetClass": info.get("assetClass", ""),

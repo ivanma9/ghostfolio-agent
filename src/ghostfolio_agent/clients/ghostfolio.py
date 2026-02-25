@@ -47,4 +47,4 @@ class GhostfolioClient:
 
     async def get_portfolio_performance(self, date_range: str = "max") -> dict[str, Any]:
         """Get portfolio performance for a date range. Range: 1d, 1w, 1m, 3m, 6m, 1y, ytd, max."""
-        return await self._get("/api/v1/portfolio/performance", params={"range": date_range})
+        return await self._get("/api/v2/portfolio/performance", params={"range": date_range})
