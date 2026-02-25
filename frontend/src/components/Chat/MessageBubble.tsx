@@ -97,6 +97,26 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
 
+        {/* Collapsible tool calls debug section */}
+        {!isUser && message.toolCalls.length > 0 && (
+          <details className="group px-1">
+            <summary className="text-xs text-gray-400 cursor-pointer hover:text-indigo-500 transition-colors flex items-center gap-1 select-none">
+              <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              {message.toolCalls.length} tool{message.toolCalls.length > 1 ? 's' : ''} called
+            </summary>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {message.toolCalls.map((tool) => (
+                <span key={tool} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  {tool}
+                </span>
+              ))}
+            </div>
+          </details>
+        )}
+
         <span className="text-xs text-gray-400 px-1">{formatTime(message.timestamp)}</span>
       </div>
     </div>
