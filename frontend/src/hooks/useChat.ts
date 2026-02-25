@@ -1,0 +1,74 @@
+import { useState, useRef, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+import { postChat } from '../api/chat'
+import type { ChatMessage } from '../types'
+
+interface UseChatOptions {
+  onToolCall?: (toolCalls: string[]) => void
+}
+
+interface UseChatReturn {
+  messages: ChatMessage[]
+  isLoading: boolean
+  sendMessage: (text: string) => Promise<void>
+}
+
+export function useChat(options: UseChatOptions = {}): UseChatReturn {
+  const { onToolCall } = options
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const sessionIdRef = useRef<string>(uuidv4())
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isLoading) return
+
+      const userMessage: ChatMessage = {
+        id: uuidv4(),
+        role: 'user',
+        content: text.trim(),
+        toolCalls: [],
+        timestamp: new Date(),
+      }
+
+      setMessages((prev) => [...prev, userMessage])
+      setIsLoading(true)
+
+      try {
+        const data = await postChat({
+          message: text.trim(),
+          session_id: sessionIdRef.current,
+        })
+
+        const assistantMessage: ChatMessage = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: data.response,
+          toolCalls: data.tool_calls ?? [],
+          timestamp: new Date(),
+        }
+
+        setMessages((prev) => [...prev, assistantMessage])
+
+        if (data.tool_calls && data.tool_calls.length > 0) {
+          onToolCall?.(data.tool_calls)
+        }
+      } catch (error) {
+        const errorMessage: ChatMessage = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: 'Sorry, something went wrong. Please try again.',
+          toolCalls: [],
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, errorMessage])
+        console.error('Chat error:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [isLoading, onToolCall]
+  )
+
+  return { messages, isLoading, sendMessage }
+}

@@ -17,6 +17,9 @@ Available tools:
 - portfolio_summary: Get current holdings, values, and allocations
 - transaction_history: Get buy/sell/dividend activity, optionally filtered by symbol
 - symbol_lookup: Search for stocks, ETFs, or crypto by name or ticker
+- portfolio_performance: Get returns over time (1d, 1w, 1m, 3m, 6m, 1y, ytd, all)
+- risk_analysis: Analyze concentration risk, sector breakdown, and currency exposure
+- paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio
 """
 
 

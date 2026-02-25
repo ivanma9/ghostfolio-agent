@@ -44,3 +44,7 @@ class GhostfolioClient:
     async def get_symbol(self, data_source: str, symbol: str) -> dict[str, Any]:
         """Get details for a specific symbol."""
         return await self._get(f"/api/v1/symbol/{data_source}/{symbol}")
+
+    async def get_portfolio_performance(self, date_range: str = "max") -> dict[str, Any]:
+        """Get portfolio performance for a date range. Range: 1d, 1w, 1m, 3m, 6m, 1y, ytd, max."""
+        return await self._get("/api/v1/portfolio/performance", params={"range": date_range})
