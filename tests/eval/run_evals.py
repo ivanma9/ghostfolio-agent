@@ -32,6 +32,13 @@ except ImportError:
     print("ERROR: 'aiohttp' package is required. Install with: pip install aiohttp")
     sys.exit(1)
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+console = Console()
+
 DATASETS_DIR = Path(__file__).parent / "datasets"
 GOLDEN_DATASET = DATASETS_DIR / "golden_set.yaml"
 SCENARIOS_DATASET = DATASETS_DIR / "labeled_scenarios.yaml"
@@ -144,30 +151,96 @@ async def check_test_case(test_case: dict, base_url: str, session: aiohttp.Clien
 
 
 # ---------------------------------------------------------------------------
-# Reporting helpers
+# Rich reporting helpers
 # ---------------------------------------------------------------------------
 
-PASS = "\033[92mPASS\033[0m"
-FAIL = "\033[91mFAIL\033[0m"
+def print_results_table(pairs: list[tuple[dict, dict]]) -> None:
+    """Print a rich table with all eval results."""
+    table = Table(title="Eval Results", show_lines=True)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Status", width=6)
+    table.add_column("ID", style="cyan", min_width=12)
+    table.add_column("Category", style="magenta")
+    table.add_column("Tools Called", style="blue")
+    table.add_column("Details", ratio=1)
+
+    for i, (result, tc) in enumerate(pairs, 1):
+        status = Text("PASS", style="bold green") if result["passed"] else Text("FAIL", style="bold red")
+        category = tc.get("category", "?")
+        complexity = tc.get("complexity", "?")
+        tools = ", ".join(result["tool_calls"]) if result["tool_calls"] else "-"
+
+        if result["passed"]:
+            preview = result["response"][:80].replace("\n", " ")
+            if len(result["response"]) > 80:
+                preview += "..."
+            details = Text(preview, style="dim")
+        else:
+            details = Text()
+            for f in result["failures"]:
+                details.append(f + "\n", style="red")
+
+        table.add_row(str(i), status, result["id"], f"{category}/{complexity}", tools, details)
+
+    console.print(table)
 
 
-def print_result(result: dict, test_case: dict) -> None:
-    status = PASS if result["passed"] else FAIL
-    category = test_case.get("category", "unknown")
-    complexity = test_case.get("complexity", "unknown")
-    difficulty = test_case.get("difficulty", "unknown")
-    stage = test_case.get("stage", "unknown")
-    print(f"  [{status}] {result['id']}  ({category} / {complexity} / {difficulty} / {stage})")
-    if not result["passed"]:
-        for failure in result["failures"]:
-            print(f"         - {failure}")
-    print(f"         tools called : {result['tool_calls']}")
-    # Truncate long responses for readability
-    preview = result["response"][:120].replace("\n", " ")
-    if len(result["response"]) > 120:
-        preview += "..."
-    print(f"         response     : {preview}")
-    print()
+def print_summary(pairs: list[tuple[dict, dict]], elapsed: float) -> None:
+    """Print score, timing, and breakdown tables."""
+    passed = sum(1 for r, _ in pairs if r["passed"])
+    total = len(pairs)
+    pct = int(passed / total * 100) if total else 0
+
+    # Score bar
+    color = "green" if pct >= 90 else "yellow" if pct >= 70 else "red"
+    score_text = f"[bold {color}]{passed}/{total} passed ({pct}%)[/]  |  {elapsed:.1f}s total ({elapsed / total:.1f}s avg)"
+    console.print(Panel(score_text, title="Score", border_style=color))
+
+    # Breakdown tables
+    for label, key in [("Category", "category"), ("Complexity", "complexity"), ("Difficulty", "difficulty")]:
+        buckets: dict[str, dict[str, int]] = {}
+        for result, tc in pairs:
+            val = tc.get(key, "unknown")
+            if val not in buckets:
+                buckets[val] = {"passed": 0, "total": 0}
+            buckets[val]["total"] += 1
+            if result["passed"]:
+                buckets[val]["passed"] += 1
+
+        t = Table(title=f"By {label}", show_edge=False, pad_edge=False)
+        t.add_column(label, style="cyan")
+        t.add_column("Result", justify="right")
+        t.add_column("Rate", justify="right")
+        for val, counts in sorted(buckets.items()):
+            rate = int(counts["passed"] / counts["total"] * 100)
+            rate_color = "green" if rate >= 90 else "yellow" if rate >= 70 else "red"
+            t.add_row(val, f"{counts['passed']}/{counts['total']}", f"[{rate_color}]{rate}%[/]")
+        console.print(t)
+        console.print()
+
+
+def print_failures_detail(pairs: list[tuple[dict, dict]]) -> None:
+    """Print detailed panels for each failed test case."""
+    failed = [(r, tc) for r, tc in pairs if not r["passed"]]
+    if not failed:
+        return
+
+    console.print(f"\n[bold red]Failed Cases ({len(failed)})[/]\n")
+    for result, tc in failed:
+        response_preview = result["response"][:200].replace("\n", " ")
+        if len(result["response"]) > 200:
+            response_preview += "..."
+
+        body = (
+            f"[bold]Input:[/] {tc.get('input', '?')}\n"
+            f"[bold]Tools:[/] {', '.join(result['tool_calls']) or 'none'}\n"
+            f"[bold]Response:[/] {response_preview}\n"
+            f"[bold red]Failures:[/]\n"
+        )
+        for f in result["failures"]:
+            body += f"  - {f}\n"
+
+        console.print(Panel(body, title=f"[red]{result['id']}[/]", border_style="red"))
 
 
 # ---------------------------------------------------------------------------
@@ -280,50 +353,25 @@ def main() -> None:
         print("ERROR: No test cases match the given filters")
         sys.exit(1)
 
-    print(f"\nGhostfolio Agent Eval Runner")
-    print(f"  API        : {args.url}")
-    print(f"  Source     : {source_label}")
-    print(f"  Cases      : {len(test_cases)}")
-    print(f"  Concurrency: {args.concurrency}\n")
-    print("=" * 60)
+    console.print(Panel(
+        f"[bold]API:[/] {args.url}\n"
+        f"[bold]Source:[/] {source_label}\n"
+        f"[bold]Cases:[/] {len(test_cases)}  |  [bold]Concurrency:[/] {args.concurrency}",
+        title="Ghostfolio Agent Eval Runner",
+        border_style="blue",
+    ))
 
-    t0 = time.monotonic()
-    pairs = asyncio.run(run_batch(test_cases, args.url, args.concurrency))
-    elapsed = time.monotonic() - t0
+    with console.status("[bold blue]Running evals...", spinner="dots"):
+        t0 = time.monotonic()
+        pairs = asyncio.run(run_batch(test_cases, args.url, args.concurrency))
+        elapsed = time.monotonic() - t0
 
-    results = []
-    for result, tc in pairs:
-        print_result(result, tc)
-        results.append(result)
+    passed = sum(1 for r, _ in pairs if r["passed"])
+    total = len(pairs)
 
-    # --- Summary ---
-    passed = sum(1 for r in results if r["passed"])
-    total = len(results)
-    score_pct = int(passed / total * 100) if total else 0
-
-    print("=" * 60)
-    print(f"SCORE: {passed}/{total} passed ({score_pct}%)")
-    print(f"TIME : {elapsed:.1f}s ({elapsed / total:.1f}s avg per case)")
-
-    # Breakdown by dimension
-    def _breakdown(label: str, key: str) -> None:
-        buckets: dict[str, dict[str, int]] = {}
-        for result, tc in pairs:
-            val = tc.get(key, "unknown")
-            if val not in buckets:
-                buckets[val] = {"passed": 0, "total": 0}
-            buckets[val]["total"] += 1
-            if result["passed"]:
-                buckets[val]["passed"] += 1
-        print(f"\n{label}:")
-        for val, counts in sorted(buckets.items()):
-            pct = int(counts["passed"] / counts["total"] * 100)
-            print(f"  {val:<20} {counts['passed']}/{counts['total']}  ({pct}%)")
-
-    _breakdown("By category", "category")
-    _breakdown("By complexity", "complexity")
-    _breakdown("By difficulty", "difficulty")
-    _breakdown("By stage", "stage")
+    print_results_table(pairs)
+    print_summary(pairs, elapsed)
+    print_failures_detail(pairs)
 
     # --- JUnit XML report ---
     if args.junit_xml:
