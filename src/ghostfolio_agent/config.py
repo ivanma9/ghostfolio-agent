@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     # 3rd party data APIs
     finnhub_api_key: str = ""
+    alpha_vantage_api_key: str = ""
 
 
 def get_settings() -> Settings:
