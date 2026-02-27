@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Agent memory
     max_context_messages: int = 40
 
+    # 3rd party data APIs
+    finnhub_api_key: str = ""
+
 
 def get_settings() -> Settings:
     return Settings()
