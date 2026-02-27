@@ -1,5 +1,5 @@
 from langgraph.prebuilt import create_react_agent
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
 
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
@@ -25,8 +25,28 @@ Available tools:
 - symbol_lookup: Search for stocks, ETFs, or crypto by name or ticker
 - portfolio_performance: Get returns over time (1d, 1w, 1m, 3m, 6m, 1y, ytd, all)
 - risk_analysis: Analyze concentration risk, sector breakdown, and currency exposure
-- paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio
+- paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio. Supports 'buy 10 AAPL' or 'buy $300 AAPL'. Fetches prices automatically.
+- holding_detail: Deep dive into a specific holding — cost basis, P&L, performance
+- activity_log: Record real portfolio activities (buy, sell, dividend) in Ghostfolio
+
+For recording real trades, use activity_log. Always confirm details with the user before recording.
 """
+
+# OpenRouter model catalog — id is what OpenRouter expects
+AVAILABLE_MODELS = [
+    {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet 4", "provider": "Anthropic"},
+    {"id": "anthropic/claude-haiku-4", "name": "Claude Haiku 4", "provider": "Anthropic"},
+    {"id": "openai/gpt-4o", "name": "GPT-4o", "provider": "OpenAI"},
+    {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "OpenAI"},
+    {"id": "openai/o3-mini", "name": "o3-mini", "provider": "OpenAI"},
+    {"id": "google/gemini-2.5-pro-preview", "name": "Gemini 2.5 Pro", "provider": "Google"},
+    {"id": "google/gemini-2.0-flash-001", "name": "Gemini 2.0 Flash", "provider": "Google"},
+    {"id": "deepseek/deepseek-chat-v3-0324", "name": "DeepSeek V3", "provider": "DeepSeek"},
+    {"id": "meta-llama/llama-4-maverick", "name": "Llama 4 Maverick", "provider": "Meta"},
+]
+
+DEFAULT_MODEL = "anthropic/claude-sonnet-4"
+
 
 def _make_context_trimmer(max_messages: int = 40):
     """Create a pre_model_hook that trims messages to fit context window."""
@@ -60,12 +80,18 @@ def _make_context_trimmer(max_messages: int = 40):
 def create_agent(
     client: GhostfolioClient,
     api_key: str,
-    model_name: str = "claude-sonnet-4-6",
+    model_name: str = DEFAULT_MODEL,
     checkpointer=None,
     max_context_messages: int = 40,
 ):
-    """Create a LangGraph agent with Ghostfolio tools."""
-    llm = ChatAnthropic(model=model_name, api_key=api_key, temperature=0, max_tokens=4096)
+    """Create a LangGraph agent with Ghostfolio tools, using OpenRouter."""
+    llm = ChatOpenAI(
+        model=model_name,
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+        max_tokens=4096,
+    )
     tools = create_tools(client)
     agent = create_react_agent(
         llm,

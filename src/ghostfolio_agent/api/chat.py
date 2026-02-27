@@ -86,7 +86,12 @@ async def chat(request: ChatRequest):
         if request.paper_trading:
             content = (
                 f"[PAPER TRADING MODE] The user has paper trading mode enabled. "
-                f"For any buy/sell/trade intent, use the paper_trade tool. "
+                f"For any buy/sell/trade intent, use the paper_trade tool directly. "
+                f"The paper_trade tool accepts actions like 'buy 10 AAPL' or 'sell 5 NVDA' — "
+                f"it looks up prices automatically, so do NOT look up prices yourself. "
+                f"If the user specifies a dollar amount (e.g. '$300 of MU'), calculate the "
+                f"number of shares by looking up the price with symbol_lookup first, then "
+                f"call paper_trade with the share count. "
                 f"User message: {request.message}"
             )
 

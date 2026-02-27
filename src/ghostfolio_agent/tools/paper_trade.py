@@ -35,32 +35,37 @@ def _default_portfolio() -> dict:
 
 
 def _parse_action(action: str):
-    """Return (command, quantity, symbol) or (command, None, None)."""
+    """Return (command, quantity, symbol, is_dollar_amount)."""
     action = action.strip().lower()
 
     # show / status / reset
     if action in ("show", "status", "show portfolio", "view portfolio", "portfolio"):
-        return "show", None, None
+        return "show", None, None, False
     if action == "reset":
-        return "reset", None, None
+        return "reset", None, None, False
+
+    # buy/sell with dollar amount: "buy $300 AAPL" or "buy $300 of AAPL"
+    m = re.match(r"^(buy|sell)\s+\$(\d+(?:\.\d+)?)\s+(?:of\s+)?([a-z0-9.\-]+)$", action)
+    if m:
+        return m.group(1), float(m.group(2)), m.group(3).upper(), True
 
     # buy/sell patterns: "buy 10 AAPL" or "buy AAPL 10"
     m = re.match(r"^(buy|sell)\s+(\d+(?:\.\d+)?)\s+([a-z0-9.\-]+)$", action)
     if m:
-        return m.group(1), float(m.group(2)), m.group(3).upper()
+        return m.group(1), float(m.group(2)), m.group(3).upper(), False
 
     m = re.match(r"^(buy|sell)\s+([a-z0-9.\-]+)\s+(\d+(?:\.\d+)?)$", action)
     if m:
-        return m.group(1), float(m.group(3)), m.group(2).upper()
+        return m.group(1), float(m.group(3)), m.group(2).upper(), False
 
-    return None, None, None
+    return None, None, None, False
 
 
 def create_paper_trade_tool(client: GhostfolioClient):
     @tool
     async def paper_trade(action: str) -> str:
-        """Execute paper trades or view paper portfolio. Actions: 'buy 10 AAPL', 'sell 5 NVDA', 'show portfolio', 'reset'. Starts with $100,000 virtual cash. Use this when the user wants to practice trading, simulate trades, or manage their paper portfolio."""
-        command, quantity, symbol = _parse_action(action)
+        """Execute paper trades or view paper portfolio. Actions: 'buy 10 AAPL', 'buy $300 AAPL', 'sell 5 NVDA', 'show portfolio', 'reset'. Supports share counts or dollar amounts. Starts with $100,000 virtual cash. Use this when the user wants to practice trading, simulate trades, or manage their paper portfolio."""
+        command, quantity, symbol, is_dollar_amount = _parse_action(action)
 
         if command is None:
             return (
@@ -152,6 +157,16 @@ def create_paper_trade_tool(client: GhostfolioClient):
                 f"Could not retrieve current market price for {resolved_symbol}. "
                 "Paper trade not executed."
             )
+
+        # Convert dollar amount to share quantity
+        if is_dollar_amount:
+            dollar_amount = quantity
+            quantity = int(dollar_amount / price)  # whole shares only
+            if quantity < 1:
+                return (
+                    f"${dollar_amount:,.2f} is not enough to buy even 1 share of "
+                    f"{resolved_symbol} at ${price:,.2f}."
+                )
 
         portfolio = _load_portfolio()
         cash = portfolio["cash"]
