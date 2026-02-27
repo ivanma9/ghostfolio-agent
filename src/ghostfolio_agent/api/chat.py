@@ -8,6 +8,9 @@ from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse
 logger = structlog.get_logger()
 from ghostfolio_agent.agent.graph import create_agent, AVAILABLE_MODELS, DEFAULT_MODEL
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
+from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.config import get_settings
 from ghostfolio_agent.verification.numerical import verify_numerical_accuracy
 
@@ -41,12 +44,18 @@ def _get_agent(model_name: str = DEFAULT_MODEL):
     global _agents
     if model_name not in _agents:
         settings = get_settings()
+        finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
+        alpha_vantage = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
+        fmp = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
         _agents[model_name] = create_agent(
             _get_client(),
             api_key=settings.openrouter_api_key,
             model_name=model_name,
             checkpointer=_get_checkpointer(),
             max_context_messages=settings.max_context_messages,
+            finnhub=finnhub,
+            alpha_vantage=alpha_vantage,
+            fmp=fmp,
         )
     return _agents[model_name]
 

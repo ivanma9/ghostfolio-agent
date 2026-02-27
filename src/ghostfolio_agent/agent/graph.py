@@ -3,6 +3,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
 
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
+from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.tools import create_tools
 
 SYSTEM_PROMPT = """You are a helpful financial assistant for Ghostfolio, a portfolio tracking application. You help users understand their investment portfolio, transactions, and market data.
@@ -83,6 +86,9 @@ def create_agent(
     model_name: str = DEFAULT_MODEL,
     checkpointer=None,
     max_context_messages: int = 40,
+    finnhub: FinnhubClient | None = None,
+    alpha_vantage: AlphaVantageClient | None = None,
+    fmp: FMPClient | None = None,
 ):
     """Create a LangGraph agent with Ghostfolio tools, using OpenRouter."""
     llm = ChatOpenAI(
@@ -92,7 +98,7 @@ def create_agent(
         temperature=0,
         max_tokens=4096,
     )
-    tools = create_tools(client)
+    tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp)
     agent = create_react_agent(
         llm,
         tools,
