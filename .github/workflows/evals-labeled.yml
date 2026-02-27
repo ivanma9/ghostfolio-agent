@@ -38,4 +38,12 @@ jobs:
           done
 
       - name: Run labeled-set evals
-        run: uv run python tests/eval/run_evals.py --scenarios --url http://localhost:8000
+        run: uv run python tests/eval/run_evals.py --scenarios --url http://localhost:8000 --junit-xml results/labeled-set.xml
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Labeled-Set Eval Results
+          path: results/labeled-set.xml
+          reporter: java-junit

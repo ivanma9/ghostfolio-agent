@@ -241,6 +241,11 @@ def main() -> None:
         default=5,
         help="Max parallel requests to the agent API (default: 5)",
     )
+    parser.add_argument(
+        "--junit-xml",
+        default=None,
+        help="Write JUnit XML report to this file path",
+    )
     args = parser.parse_args()
 
     # Determine which dataset(s) to load
@@ -320,8 +325,70 @@ def main() -> None:
     _breakdown("By difficulty", "difficulty")
     _breakdown("By stage", "stage")
 
+    # --- JUnit XML report ---
+    if args.junit_xml:
+        write_junit_xml(pairs, elapsed, args.junit_xml)
+        print(f"\nJUnit XML report written to: {args.junit_xml}")
+
     print()
     sys.exit(0 if passed == total else 1)
+
+
+# ---------------------------------------------------------------------------
+# JUnit XML output
+# ---------------------------------------------------------------------------
+
+def _xml_escape(text: str) -> str:
+    """Escape special characters for XML."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def write_junit_xml(pairs: list[tuple[dict, dict]], elapsed: float, path: str) -> None:
+    """Write a JUnit XML report compatible with GitHub Actions test reporters."""
+    total = len(pairs)
+    failures = sum(1 for r, _ in pairs if not r["passed"])
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<testsuites tests="{total}" failures="{failures}" time="{elapsed:.1f}">',
+        f'  <testsuite name="ghostfolio-evals" tests="{total}" failures="{failures}" time="{elapsed:.1f}">',
+    ]
+
+    for result, tc in pairs:
+        tc_id = _xml_escape(result["id"])
+        category = _xml_escape(tc.get("category", "unknown"))
+        complexity = _xml_escape(tc.get("complexity", "unknown"))
+        user_input = _xml_escape(tc.get("input", ""))
+
+        lines.append(
+            f'    <testcase name="{tc_id}" classname="{category}.{complexity}">'
+        )
+
+        if not result["passed"]:
+            failure_msgs = "\n".join(result["failures"])
+            response_preview = _xml_escape(result["response"][:300])
+            tools = ", ".join(result["tool_calls"]) if result["tool_calls"] else "none"
+            lines.append(
+                f'      <failure message="{_xml_escape(failure_msgs)}">'
+                f"Input: {user_input}\n"
+                f"Tools called: {tools}\n"
+                f"Response: {response_preview}\n"
+                f"Failures:\n{_xml_escape(failure_msgs)}"
+                f"</failure>"
+            )
+
+        lines.append("    </testcase>")
+
+    lines.append("  </testsuite>")
+    lines.append("</testsuites>")
+
+    Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":

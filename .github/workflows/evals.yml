@@ -45,4 +45,12 @@ jobs:
           done
 
       - name: Run golden-set evals
-        run: uv run python tests/eval/run_evals.py --url http://localhost:8000
+        run: uv run python tests/eval/run_evals.py --url http://localhost:8000 --junit-xml results/golden-set.xml
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Golden-Set Eval Results
+          path: results/golden-set.xml
+          reporter: java-junit
