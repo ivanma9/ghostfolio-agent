@@ -1,0 +1,218 @@
+# Stage 1: Golden Set — deterministic baseline correctness checks
+# Run on every meaningful change. All checks are against tool outputs only.
+
+- id: tc_001_portfolio_overview
+  input: "What's in my portfolio?"
+  expected_tools: [portfolio_summary]
+  expected_tool_output_contains: [AAPL, MSFT, GOOGL, VTI, AMZN]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Basic portfolio overview should list all holdings by calling portfolio_summary tool
+
+- id: tc_002_transaction_lookup
+  input: Show me my AAPL transactions
+  expected_tools: [transaction_history]
+  expected_tool_output_contains: [AAPL, BUY, "230", "245"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: transactions
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Transaction history for AAPL should show both buy orders at $230 and $245
+
+- id: tc_003_symbol_search
+  input: Look up NVDA stock
+  expected_tools: [symbol_lookup]
+  expected_tool_output_contains: [NVDA, NVIDIA]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Symbol search for NVDA should return NVIDIA ticker information via symbol_lookup tool
+
+- id: tc_006_portfolio_performance
+  input: Show me my portfolio performance over the last month
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: [Performance, "%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Portfolio performance request should call portfolio_performance tool and return return percentages
+
+- id: tc_007_risk_analysis
+  input: Analyze my portfolio risk and diversification
+  expected_tools: [risk_analysis]
+  expected_tool_output_contains: [Risk, Concentration]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: risk
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Risk analysis request should call risk_analysis tool and discuss concentration risk
+
+- id: tc_008_paper_trade_buy
+  input: Paper buy 5 shares of AAPL
+  expected_tools: [paper_trade]
+  expected_tool_output_contains: [BUY, Paper Trade Executed]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: paper_trading
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Paper trade buy should call paper_trade tool and confirm the purchase
+
+- id: tc_009_transaction_history_no_symbol
+  input: Show me all my recent transactions
+  expected_tools: [transaction_history]
+  expected_tool_output_contains: [Transaction History, BUY]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: transactions
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Calling transaction_history without a symbol filter should return all recent activity
+
+- id: tc_010_performance_1d
+  input: How did my portfolio do today?
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: [Performance, "%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Single-day performance query should invoke portfolio_performance with period=1d
+
+- id: tc_011_performance_ytd
+  input: "What's my year-to-date return?"
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: ["%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: YTD performance query should invoke portfolio_performance with period=ytd
+
+- id: tc_012_performance_all_time
+  input: Show me my portfolio performance since inception
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: [Performance, "%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: All-time performance request should call portfolio_performance with period=all
+
+- id: tc_013_symbol_lookup_etf
+  input: What is VTI?
+  expected_tools: [symbol_lookup]
+  expected_tool_output_contains: [VTI]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Querying a known ETF ticker should call symbol_lookup and return fund details
+
+- id: tc_014_symbol_lookup_by_name
+  input: Find the ticker symbol for Tesla
+  expected_tools: [symbol_lookup]
+  expected_tool_output_contains: [Tesla]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: "Name-based symbol search should call symbol_lookup with query='Tesla' and return TSLA"
+
+- id: tc_016_paper_trade_show
+  input: Show my paper trading portfolio
+  expected_tools: [paper_trade]
+  expected_tool_output_contains: [Paper Portfolio, "$"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: paper_trading
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Requesting paper portfolio state should call paper_trade with action=show
+
+- id: tc_017_paper_trade_reset
+  input: Reset my paper trading account
+  expected_tools: [paper_trade]
+  expected_tool_output_contains: [reset, "$100,000"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: paper_trading
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Reset command should call paper_trade with action=reset and restore the $100K balance
+
+- id: tc_018_risk_currency_exposure
+  input: What currency risks does my portfolio have?
+  expected_tools: [risk_analysis]
+  expected_tool_output_contains: [Currency Exposure]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: risk
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Currency risk question should invoke risk_analysis tool and surface currency exposure data
+
+- id: tc_020_performance_1y
+  input: Give me my 1-year portfolio performance
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: [Performance, "%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: One-year performance query should call portfolio_performance with period=1y
+
+- id: tc_021_performance_6m
+  input: How has my portfolio performed over the last 6 months?
+  expected_tools: [portfolio_performance]
+  expected_tool_output_contains: [Performance, "%"]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Six-month performance query should call portfolio_performance with period=6m
+
+- id: tc_046_recent_trades_and_current_value
+  input: Show my recent trades and the current total value of my portfolio
+  expected_tools: [transaction_history, portfolio_summary]
+  expected_tool_output_contains: [Transaction History, Portfolio Summary]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: portfolio
+  complexity: multi_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Combined request for transaction history and current portfolio value
