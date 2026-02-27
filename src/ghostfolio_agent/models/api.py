@@ -5,6 +5,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User's natural language query")
     session_id: str = Field(default="default", description="Session ID for conversation history")
     model: str | None = Field(default=None, description="OpenRouter model ID to use")
+    paper_trading: bool = Field(default=False, description="Enable paper trading mode for buy/sell intent")
 
 
 class Citation(BaseModel):

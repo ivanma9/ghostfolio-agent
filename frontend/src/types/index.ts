@@ -9,6 +9,14 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string
   session_id: string
+  model?: string
+  paper_trading?: boolean
+}
+
+export interface ModelOption {
+  id: string
+  name: string
+  provider: string
 }
 
 export interface ChatResponse {

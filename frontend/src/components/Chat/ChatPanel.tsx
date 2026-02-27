@@ -2,17 +2,29 @@ import { useEffect, useRef } from 'react'
 import type { ChatMessage } from '../../types'
 import MessageBubble from './MessageBubble'
 import ChatInput from './ChatInput'
+import ModelSelector from './ModelSelector'
+import PaperTradeToggle from './PaperTradeToggle'
 
 interface ChatPanelProps {
   messages: ChatMessage[]
   isLoading: boolean
   onSend: (text: string) => void
+  selectedModel: string
+  onModelChange: (modelId: string) => void
+  isPaperTrading: boolean
+  onPaperTradingChange: (active: boolean) => void
 }
 
 const SUGGESTED_QUERIES = [
   "What's in my portfolio?",
   'Show my recent transactions',
   'Look up NVDA',
+]
+
+const PAPER_TRADE_QUERIES = [
+  "What's in my portfolio?",
+  'Buy 10 AAPL',
+  'Sell 5 NVDA',
 ]
 
 function TypingIndicator() {
@@ -41,7 +53,7 @@ function TypingIndicator() {
   )
 }
 
-function WelcomeState({ onSend }: { onSend: (text: string) => void }) {
+function WelcomeState({ onSend, queries }: { onSend: (text: string) => void; queries: string[] }) {
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-6 pb-8 select-none">
       {/* Logo / icon */}
@@ -67,7 +79,7 @@ function WelcomeState({ onSend }: { onSend: (text: string) => void }) {
       </p>
 
       <div className="flex flex-wrap justify-center gap-2">
-        {SUGGESTED_QUERIES.map((query) => (
+        {queries.map((query) => (
           <button
             key={query}
             onClick={() => onSend(query)}
@@ -81,7 +93,7 @@ function WelcomeState({ onSend }: { onSend: (text: string) => void }) {
   )
 }
 
-export default function ChatPanel({ messages, isLoading, onSend }: ChatPanelProps) {
+export default function ChatPanel({ messages, isLoading, onSend, selectedModel, onModelChange, isPaperTrading, onPaperTradingChange }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -101,7 +113,7 @@ export default function ChatPanel({ messages, isLoading, onSend }: ChatPanelProp
         style={{ scrollBehavior: 'smooth' }}
       >
         {!hasMessages ? (
-          <WelcomeState onSend={onSend} />
+          <WelcomeState onSend={onSend} queries={isPaperTrading ? PAPER_TRADE_QUERIES : SUGGESTED_QUERIES} />
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
             {messages.map((msg) => (
@@ -112,8 +124,17 @@ export default function ChatPanel({ messages, isLoading, onSend }: ChatPanelProp
         )}
       </div>
 
-      {/* Input bar */}
-      <ChatInput onSend={onSend} disabled={isLoading} />
+      {/* Input bar with model selector on the left */}
+      <ChatInput
+        onSend={onSend}
+        disabled={isLoading}
+        leftSlot={
+          <>
+            <ModelSelector selectedModel={selectedModel} onModelChange={onModelChange} />
+            <PaperTradeToggle isActive={isPaperTrading} onChange={onPaperTradingChange} />
+          </>
+        }
+      />
     </div>
   )
 }

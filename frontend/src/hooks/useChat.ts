@@ -10,7 +10,7 @@ interface UseChatOptions {
 interface UseChatReturn {
   messages: ChatMessage[]
   isLoading: boolean
-  sendMessage: (text: string) => Promise<void>
+  sendMessage: (text: string, model?: string, paperTrading?: boolean) => Promise<void>
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
@@ -20,7 +20,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const sessionIdRef = useRef<string>(uuidv4())
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, model?: string, paperTrading?: boolean) => {
       if (!text.trim() || isLoading) return
 
       const userMessage: ChatMessage = {
@@ -38,6 +38,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         const data = await postChat({
           message: text.trim(),
           session_id: sessionIdRef.current,
+          model,
+          paper_trading: paperTrading,
         })
 
         const assistantMessage: ChatMessage = {

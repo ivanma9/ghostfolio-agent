@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import ChatPanel from './components/Chat/ChatPanel'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { useChat } from './hooks/useChat'
@@ -6,6 +6,8 @@ import { useSidebar } from './hooks/useSidebar'
 
 function App() {
   const sidebar = useSidebar()
+  const [selectedModel, setSelectedModel] = useState('anthropic/claude-sonnet-4')
+  const [isPaperTrading, setIsPaperTrading] = useState(false)
 
   const handleToolCall = useCallback(
     (toolCalls: string[]) => {
@@ -17,6 +19,13 @@ function App() {
   )
 
   const chat = useChat({ onToolCall: handleToolCall })
+
+  const handleSend = useCallback(
+    (text: string) => {
+      chat.sendMessage(text, selectedModel, isPaperTrading)
+    },
+    [chat.sendMessage, selectedModel, isPaperTrading],
+  )
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -50,7 +59,11 @@ function App() {
         <ChatPanel
           messages={chat.messages}
           isLoading={chat.isLoading}
-          onSend={chat.sendMessage}
+          onSend={handleSend}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          isPaperTrading={isPaperTrading}
+          onPaperTradingChange={setIsPaperTrading}
         />
       </div>
     </div>

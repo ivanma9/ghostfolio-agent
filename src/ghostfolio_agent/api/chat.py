@@ -81,10 +81,19 @@ async def chat(request: ChatRequest):
         model = request.model or DEFAULT_MODEL
         agent = _get_agent(model)
 
+        # Wrap message with paper trading instruction if enabled
+        content = request.message
+        if request.paper_trading:
+            content = (
+                f"[PAPER TRADING MODE] The user has paper trading mode enabled. "
+                f"For any buy/sell/trade intent, use the paper_trade tool. "
+                f"User message: {request.message}"
+            )
+
         # Checkpointer manages history per thread_id — only send the new message
         config = {"configurable": {"thread_id": request.session_id}}
         result = await agent.ainvoke(
-            {"messages": [HumanMessage(content=request.message)]},
+            {"messages": [HumanMessage(content=content)]},
             config=config,
         )
 
