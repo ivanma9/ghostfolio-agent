@@ -1,5 +1,5 @@
 import httpx
-from typing import Any
+from typing import Any, cast
 
 
 class FinnhubClient:
@@ -28,13 +28,13 @@ class FinnhubClient:
     async def get_congressional_trading(self, symbol: str) -> list[dict[str, Any]]:
         """Get congressional trading activity for a symbol."""
         result = await self._get("/stock/congressional-trading", params={"symbol": symbol})
-        return result.get("data", [])
+        return cast(list[dict[str, Any]], result.get("data", []))
 
     async def get_analyst_recommendations(self, symbol: str) -> list[dict[str, Any]]:
         """Get analyst recommendation trends for a symbol."""
-        return await self._get("/stock/recommendation", params={"symbol": symbol})
+        return cast(list[dict[str, Any]], await self._get("/stock/recommendation", params={"symbol": symbol}))
 
     async def get_earnings_calendar(self, symbol: str) -> list[dict[str, Any]]:
         """Get upcoming earnings dates and estimates for a symbol."""
         result = await self._get("/calendar/earnings", params={"symbol": symbol})
-        return result.get("earningsCalendar", [])
+        return cast(list[dict[str, Any]], result.get("earningsCalendar", []))

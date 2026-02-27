@@ -111,3 +111,12 @@ class TestEarningsCalendar:
         assert len(result) == 1
         assert result[0]["epsEstimate"] == 0.72
         assert result[0]["hour"] == "amc"
+
+    @respx.mock
+    async def test_raises_on_api_error(self, client):
+        respx.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={"symbol": "TSLA", "token": "test-key"},
+        ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
+        with pytest.raises(RuntimeError, match="Finnhub API error"):
+            await client.get_earnings_calendar("TSLA")
