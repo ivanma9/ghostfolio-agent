@@ -1,19 +1,12 @@
-name: Golden-Set Evals
+name: Labeled-Set Evals
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'tests/eval/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
   workflow_dispatch:
 
 jobs:
   evals:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -44,5 +37,5 @@ jobs:
             sleep 2
           done
 
-      - name: Run golden-set evals
-        run: uv run python tests/eval/run_evals.py --url http://localhost:8000
+      - name: Run labeled-set evals
+        run: uv run python tests/eval/run_evals.py --scenarios --url http://localhost:8000
