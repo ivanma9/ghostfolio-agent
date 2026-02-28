@@ -728,6 +728,204 @@ function PaperTradeCard({ data }: { data: PaperTradeResult }) {
   )
 }
 
+function HoldingDetailCard({ data }: { data: HoldingDetailData }) {
+  const pnlColor = data.unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
+  const pnlSign = data.unrealizedPnl >= 0 ? '+' : ''
+
+  return (
+    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-indigo-500/10 to-violet-500/10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">{data.name}</h3>
+            <span className="text-sm text-white/50">{data.symbol} · {data.currency}</span>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-semibold text-white">${data.currentValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <div className={`text-sm font-medium ${pnlColor}`}>
+              {pnlSign}${Math.abs(data.unrealizedPnl).toLocaleString(undefined, { minimumFractionDigits: 2 })} ({pnlSign}{data.unrealizedPnlPercent.toFixed(1)}%)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Smart Summary Badges */}
+      {(data.impliedMove || data.analystSignal || data.sentiment || data.earningsAlert) && (
+        <div className="px-5 py-3 border-b border-white/10 flex flex-wrap gap-2">
+          {data.impliedMove && (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+              data.impliedMove.direction === 'upside'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-red-500/20 text-red-400'
+            }`}>
+              {data.impliedMove.direction === 'upside' ? '↑' : '↓'}{' '}
+              {data.impliedMove.direction === 'upside' ? '+' : ''}{data.impliedMove.percent.toFixed(1)}% implied
+            </span>
+          )}
+          {data.analystSignal && (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+              data.analystSignal.label === 'Strong Buy' || data.analystSignal.label === 'Buy'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : data.analystSignal.label === 'Sell'
+                  ? 'bg-red-500/20 text-red-400'
+                  : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              {data.analystSignal.label} ({data.analystSignal.bullish}/{data.analystSignal.total})
+            </span>
+          )}
+          {data.sentiment && (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+              data.sentiment.label === 'Bullish'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : data.sentiment.label === 'Bearish'
+                  ? 'bg-red-500/20 text-red-400'
+                  : 'bg-gray-500/20 text-gray-400'
+            }`}>
+              {data.sentiment.label}
+            </span>
+          )}
+          {data.earningsAlert && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">
+              Earnings in {data.earningsAlert.daysUntil}d
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Position Details Grid */}
+      <div className="px-5 py-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm border-b border-white/10">
+        <div className="flex justify-between">
+          <span className="text-white/50">Shares</span>
+          <span className="text-white">{data.quantity}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-white/50">Avg Cost</span>
+          <span className="text-white">${data.avgCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-white/50">Market Price</span>
+          <span className="text-white">${data.marketPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-white/50">Invested</span>
+          <span className="text-white">${data.totalInvested.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        {data.dividends !== null && (
+          <div className="flex justify-between">
+            <span className="text-white/50">Dividends</span>
+            <span className="text-emerald-400">${data.dividends.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span className="text-white/50">First Buy</span>
+          <span className="text-white">{data.firstBuy}</span>
+        </div>
+      </div>
+
+      {/* Price Target Range */}
+      {data.priceTargets && (
+        <div className="px-5 py-3 border-b border-white/10">
+          <div className="text-xs text-white/50 mb-2">Price Target Range</div>
+          <div className="relative h-6 bg-white/5 rounded-full overflow-hidden">
+            {(() => {
+              const low = data.priceTargets!.low
+              const high = data.priceTargets!.high
+              const range = high - low
+              if (range <= 0) return null
+              const consensusPos = ((data.priceTargets!.consensus - low) / range) * 100
+              const pricePos = ((data.marketPrice - low) / range) * 100
+              const clamp = (v: number) => Math.max(2, Math.min(98, v))
+              return (
+                <>
+                  <div className="absolute top-0 bottom-0 bg-indigo-500/20 rounded-full" style={{ left: '0%', right: '0%' }} />
+                  <div className="absolute top-1 bottom-1 w-0.5 bg-indigo-400" style={{ left: `${clamp(consensusPos)}%` }} title={`Target: $${data.priceTargets!.consensus}`} />
+                  <div className="absolute top-0 bottom-0 w-1 bg-white rounded-full" style={{ left: `${clamp(pricePos)}%` }} title={`Current: $${data.marketPrice}`} />
+                </>
+              )
+            })()}
+          </div>
+          <div className="flex justify-between mt-2 text-[10px] text-white/40">
+            <span>Low ${data.priceTargets.low}</span>
+            <span>Consensus ${data.priceTargets.consensus}</span>
+            <span>High ${data.priceTargets.high}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Expandable: News */}
+      {data.news && data.news.length > 0 && (
+        <details className="border-b border-white/10">
+          <summary className="px-5 py-2 text-sm text-white/60 cursor-pointer hover:text-white/80">
+            News ({data.news.length})
+          </summary>
+          <div className="px-5 pb-3 space-y-1">
+            {data.news.map((item, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  item.sentiment.includes('Bullish') ? 'bg-emerald-500/20 text-emerald-400'
+                    : item.sentiment.includes('Bearish') ? 'bg-red-500/20 text-red-400'
+                    : 'bg-gray-500/20 text-gray-400'
+                }`}>{item.sentiment.replace('Somewhat_', '').replace('Somewhat-', '')}</span>
+                <span className="text-white/70">{item.title}</span>
+                <span className="text-white/30 shrink-0">{item.source}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Expandable: Analyst Breakdown */}
+      {data.analystCounts && (
+        <details className="border-b border-white/10">
+          <summary className="px-5 py-2 text-sm text-white/60 cursor-pointer hover:text-white/80">
+            Analyst Breakdown ({data.analystCounts.period})
+          </summary>
+          <div className="px-5 pb-3 space-y-1.5">
+            {[
+              { label: 'Strong Buy', count: data.analystCounts.strongBuy, color: 'bg-emerald-500' },
+              { label: 'Buy', count: data.analystCounts.buy, color: 'bg-emerald-400' },
+              { label: 'Hold', count: data.analystCounts.hold, color: 'bg-yellow-400' },
+              { label: 'Sell', count: data.analystCounts.sell, color: 'bg-red-400' },
+              { label: 'Strong Sell', count: data.analystCounts.strongSell, color: 'bg-red-500' },
+            ].map(({ label, count, color }) => {
+              const total = data.analystCounts!.strongBuy + data.analystCounts!.buy + data.analystCounts!.hold + data.analystCounts!.sell + data.analystCounts!.strongSell
+              const pct = total > 0 ? (count / total) * 100 : 0
+              return (
+                <div key={label} className="flex items-center gap-2 text-xs">
+                  <span className="w-20 text-white/50">{label}</span>
+                  <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-6 text-right text-white/60">{count}</span>
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      )}
+
+      {/* Expandable: Earnings */}
+      {data.earnings && data.earnings.length > 0 && (
+        <details>
+          <summary className="px-5 py-2 text-sm text-white/60 cursor-pointer hover:text-white/80">
+            Earnings ({data.earnings.length})
+          </summary>
+          <div className="px-5 pb-3 space-y-1">
+            {data.earnings.map((e, i) => (
+              <div key={i} className="flex gap-4 text-xs text-white/70">
+                <span>{e.date}</span>
+                <span>Est: {e.epsEstimate}</span>
+                <span>Actual: {e.epsActual}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 interface RichCardProps {
@@ -770,6 +968,11 @@ export default function RichCard({ toolCalls, content }: RichCardProps) {
     if (trade) return <PaperTradeCard data={trade} />
     const portfolio = parsePaperPortfolio(content)
     if (portfolio) return <PaperPortfolioCard data={portfolio} />
+  }
+
+  if (toolCalls.includes('holding_detail')) {
+    const data = parseHoldingDetail(content)
+    if (data) return <HoldingDetailCard data={data} />
   }
 
   return null
