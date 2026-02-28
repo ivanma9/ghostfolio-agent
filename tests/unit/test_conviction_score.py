@@ -81,3 +81,96 @@ class TestPriceTargetScore:
         data = [{"targetConsensus": 200.0}]
         score, explanation = compute_price_target_score(data, 0.0)
         assert score is None
+
+
+from datetime import date, timedelta
+from ghostfolio_agent.tools.conviction_score import (
+    compute_sentiment_score,
+    compute_earnings_score,
+)
+
+
+class TestSentimentScore:
+    def test_all_bullish(self):
+        """All bullish articles → 100."""
+        news = [
+            {"overall_sentiment_label": "Bullish"},
+            {"overall_sentiment_label": "Somewhat-Bullish"},
+        ]
+        score, explanation = compute_sentiment_score(news)
+        assert score == 100
+        assert "2 of 2" in explanation
+
+    def test_all_bearish(self):
+        """All bearish articles → 0."""
+        news = [
+            {"overall_sentiment_label": "Bearish"},
+            {"overall_sentiment_label": "Somewhat-Bearish"},
+        ]
+        score, explanation = compute_sentiment_score(news)
+        assert score == 0
+
+    def test_mixed(self):
+        """3 bullish, 1 neutral, 1 bearish → 60."""
+        news = [
+            {"overall_sentiment_label": "Bullish"},
+            {"overall_sentiment_label": "Somewhat-Bullish"},
+            {"overall_sentiment_label": "Bullish"},
+            {"overall_sentiment_label": "Neutral"},
+            {"overall_sentiment_label": "Bearish"},
+        ]
+        score, explanation = compute_sentiment_score(news)
+        assert score == 60
+        assert "3 of 5" in explanation
+
+    def test_all_neutral(self):
+        """All neutral → 50."""
+        news = [{"overall_sentinel_label": "Neutral"}] * 4
+        score, explanation = compute_sentiment_score(news)
+        assert score == 50
+
+    def test_none_data(self):
+        """None → None."""
+        score, explanation = compute_sentiment_score(None)
+        assert score is None
+
+    def test_empty_list(self):
+        """Empty → None."""
+        score, explanation = compute_sentiment_score([])
+        assert score is None
+
+
+class TestEarningsScore:
+    def test_no_upcoming(self):
+        """No earnings data → 75 (stable)."""
+        score, explanation = compute_earnings_score(None)
+        assert score == 75
+        assert "No upcoming" in explanation
+
+    def test_earnings_within_14_days(self):
+        """Earnings in 8 days → 50 (uncertainty)."""
+        earn_date = (date.today() + timedelta(days=8)).isoformat()
+        data = [{"date": earn_date}]
+        score, explanation = compute_earnings_score(data)
+        assert score == 50
+        assert "8 days" in explanation
+
+    def test_earnings_far_away(self):
+        """Earnings 45 days away → 75 (stable, same as no upcoming)."""
+        earn_date = (date.today() + timedelta(days=45)).isoformat()
+        data = [{"date": earn_date}]
+        score, explanation = compute_earnings_score(data)
+        assert score == 75
+
+    def test_earnings_today(self):
+        """Earnings today → 50."""
+        earn_date = date.today().isoformat()
+        data = [{"date": earn_date}]
+        score, explanation = compute_earnings_score(data)
+        assert score == 50
+        assert "0 days" in explanation
+
+    def test_empty_list(self):
+        """Empty list → 75 (stable)."""
+        score, explanation = compute_earnings_score([])
+        assert score == 75
