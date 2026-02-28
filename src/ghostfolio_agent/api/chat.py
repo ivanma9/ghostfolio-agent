@@ -1,6 +1,7 @@
 import structlog
 from fastapi import APIRouter
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import interrupt, GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse
@@ -12,7 +13,7 @@ from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.config import get_settings
-from ghostfolio_agent.verification.numerical import verify_numerical_accuracy
+from ghostfolio_agent.verification.pipeline import run_verification_pipeline
 
 router = APIRouter()
 
@@ -105,10 +106,23 @@ async def chat(request: ChatRequest):
 
         # Checkpointer manages history per thread_id — only send the new message
         config = {"configurable": {"thread_id": request.session_id}}
-        result = await agent.ainvoke(
-            {"messages": [HumanMessage(content=content)]},
-            config=config,
-        )
+
+        try:
+            result = await agent.ainvoke(
+                {"messages": [HumanMessage(content=content)]},
+                config=config,
+            )
+        except GraphInterrupt as gi:
+            # Human-in-the-loop: activity_log interrupted for confirmation
+            prompt = gi.args[0] if gi.args else "Please confirm this action."
+            return ChatResponse(
+                response=str(prompt),
+                session_id=request.session_id,
+                tool_calls=[],
+                tool_outputs=[],
+                confidence="high",
+                citations=[],
+            )
 
         # Extract response and tool calls from messages
         response_messages = result.get("messages", [])
@@ -126,20 +140,34 @@ async def chat(request: ChatRequest):
         # Build citations from tool call results
         citations = _extract_citations(response_messages)
 
-        # Run numerical verification against live Ghostfolio data
-        confidence = "high"
+        # Run full verification pipeline
         client = _get_client()
-        if client is not None and ai_response:
-            verification = await verify_numerical_accuracy(ai_response, client)
-            confidence = verification.confidence
+        pipeline_result = await run_verification_pipeline(
+            response_text=ai_response,
+            tool_outputs=tool_outputs,
+            client=client if ai_response else None,
+        )
+
+        # Build per-verifier confidence details
+        verification_details: dict[str, str] = {}
+        if pipeline_result.numerical:
+            verification_details["numerical"] = pipeline_result.numerical.confidence
+        if pipeline_result.hallucination:
+            verification_details["hallucination"] = pipeline_result.hallucination.confidence
+        if pipeline_result.output_validation:
+            verification_details["output_validation"] = pipeline_result.output_validation.confidence
+        if pipeline_result.domain_constraints:
+            verification_details["domain_constraints"] = pipeline_result.domain_constraints.confidence
 
         return ChatResponse(
-            response=ai_response,
+            response=pipeline_result.response_text,
             session_id=request.session_id,
             tool_calls=list(set(tool_calls_made)),
             tool_outputs=tool_outputs,
-            confidence=confidence,
+            confidence=pipeline_result.overall_confidence,
             citations=citations,
+            verification_issues=pipeline_result.all_issues,
+            verification_details=verification_details,
         )
     except Exception as e:
         logger.error("chat_endpoint_failed", error=str(e), session_id=request.session_id)

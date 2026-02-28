@@ -2,6 +2,7 @@ import re
 from datetime import date, timezone, datetime
 import structlog
 from langchain_core.tools import tool
+from langgraph.types import interrupt
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 
 logger = structlog.get_logger()
@@ -80,6 +81,20 @@ def create_activity_log_tool(client: GhostfolioClient):
                 "type": activity_type,
                 "unitPrice": unit_price,
             }
+
+            # Human-in-the-loop: pause for user confirmation before recording
+            if activity_type == "DIVIDEND":
+                preview = f"{activity_type} of ${unit_price:,.2f} from {resolved_symbol}"
+            else:
+                total = quantity * unit_price
+                preview = f"{activity_type} {quantity} {resolved_symbol} @ ${unit_price:,.2f} (total: ${total:,.2f})"
+
+            confirmation = interrupt(
+                f"Confirm recording real portfolio activity: {preview}?"
+            )
+
+            if not confirmation:
+                return "Activity not recorded — user did not confirm."
 
             await client.create_order(order_data)
 

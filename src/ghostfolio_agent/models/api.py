@@ -35,6 +35,12 @@ class ChatResponse(BaseModel):
     citations: list[Citation] = Field(
         default_factory=list, description="Citations linking claims to tool results"
     )
+    verification_issues: list[str] = Field(
+        default_factory=list, description="Issues found by the verification pipeline"
+    )
+    verification_details: dict[str, str] = Field(
+        default_factory=dict, description="Per-verifier confidence map"
+    )
 
 
 class HealthResponse(BaseModel):
