@@ -3,9 +3,9 @@ from typing import Any, cast
 
 
 class FMPClient:
-    """Async HTTP client for Financial Modeling Prep API (insider trading, analyst estimates)."""
+    """Async HTTP client for Financial Modeling Prep API (analyst estimates, price targets)."""
 
-    BASE_URL = "https://financialmodelingprep.com/api"
+    BASE_URL = "https://financialmodelingprep.com/stable"
 
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
@@ -25,12 +25,17 @@ class FMPClient:
             )
         return response.json()
 
-    async def get_insider_trading(self, symbol: str) -> list[dict[str, Any]]:
-        """Get insider trading activity for a symbol."""
-        result = await self._get("/v4/insider-trading", params={"symbol": symbol})
+    async def get_analyst_estimates(self, symbol: str) -> list[dict[str, Any]]:
+        """Get analyst estimates (revenue, EPS forecasts) for a symbol. Annual period."""
+        result = await self._get("/analyst-estimates", params={"symbol": symbol, "period": "annual"})
         return cast(list[dict[str, Any]], result if isinstance(result, list) else [])
 
-    async def get_analyst_estimates(self, symbol: str) -> list[dict[str, Any]]:
-        """Get analyst estimates/consensus for a symbol."""
-        result = await self._get(f"/v3/analyst-estimates/{symbol}")
+    async def get_price_target_consensus(self, symbol: str) -> list[dict[str, Any]]:
+        """Get analyst price target consensus (high, low, median, consensus)."""
+        result = await self._get("/price-target-consensus", params={"symbol": symbol})
+        return cast(list[dict[str, Any]], result if isinstance(result, list) else [])
+
+    async def get_price_target_summary(self, symbol: str) -> list[dict[str, Any]]:
+        """Get price target summary with counts and averages by time period."""
+        result = await self._get("/price-target-summary", params={"symbol": symbol})
         return cast(list[dict[str, Any]], result if isinstance(result, list) else [])

@@ -9,67 +9,22 @@ def client():
     return FMPClient(api_key="test-key")
 
 
-class TestInsiderTrading:
-    @respx.mock
-    async def test_returns_insider_trades(self, client):
-        respx.get(
-            "https://financialmodelingprep.com/api/v4/insider-trading",
-            params={"symbol": "AAPL", "apikey": "test-key"},
-        ).mock(return_value=httpx.Response(200, json=[
-            {
-                "symbol": "AAPL",
-                "filingDate": "2026-02-20",
-                "transactionDate": "2026-02-18",
-                "transactionType": "S-Sale",
-                "securitiesOwned": 100000,
-                "securitiesTransacted": 5000,
-                "price": 185.50,
-                "reportingName": "Tim Cook",
-                "typeOfOwner": "officer",
-            }
-        ]))
-        result = await client.get_insider_trading("AAPL")
-        assert len(result) == 1
-        assert result[0]["reportingName"] == "Tim Cook"
-        assert result[0]["transactionType"] == "S-Sale"
-
-    @respx.mock
-    async def test_returns_empty_list_on_no_trades(self, client):
-        respx.get(
-            "https://financialmodelingprep.com/api/v4/insider-trading",
-            params={"symbol": "UNKNOWN", "apikey": "test-key"},
-        ).mock(return_value=httpx.Response(200, json=[]))
-        result = await client.get_insider_trading("UNKNOWN")
-        assert result == []
-
-    @respx.mock
-    async def test_raises_on_api_error(self, client):
-        respx.get(
-            "https://financialmodelingprep.com/api/v4/insider-trading",
-            params={"symbol": "AAPL", "apikey": "test-key"},
-        ).mock(return_value=httpx.Response(403, text="Forbidden"))
-        with pytest.raises(RuntimeError, match="FMP API error"):
-            await client.get_insider_trading("AAPL")
-
-
 class TestAnalystEstimates:
     @respx.mock
     async def test_returns_analyst_estimates(self, client):
         respx.get(
-            "https://financialmodelingprep.com/api/v3/analyst-estimates/TSLA",
-            params={"apikey": "test-key"},
+            "https://financialmodelingprep.com/stable/analyst-estimates",
+            params={"symbol": "TSLA", "period": "annual", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(200, json=[
             {
                 "symbol": "TSLA",
                 "date": "2026-03-31",
-                "estimatedRevenueLow": 20000000000,
-                "estimatedRevenueHigh": 28000000000,
-                "estimatedRevenueAvg": 25000000000,
-                "estimatedEpsLow": 0.55,
-                "estimatedEpsHigh": 0.90,
+                "revenueLow": 20000000000,
+                "revenueHigh": 28000000000,
+                "revenueAvg": 25000000000,
+                "ebitdaLow": 3000000000,
+                "ebitdaHigh": 5000000000,
                 "estimatedEpsAvg": 0.72,
-                "numberAnalystEstimatedRevenue": 30,
-                "numberAnalystsEstimatedEps": 28,
             }
         ]))
         result = await client.get_analyst_estimates("TSLA")
@@ -79,17 +34,95 @@ class TestAnalystEstimates:
     @respx.mock
     async def test_returns_empty_list_when_no_estimates(self, client):
         respx.get(
-            "https://financialmodelingprep.com/api/v3/analyst-estimates/UNKNOWN",
-            params={"apikey": "test-key"},
+            "https://financialmodelingprep.com/stable/analyst-estimates",
+            params={"symbol": "UNKNOWN", "period": "annual", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(200, json=[]))
         result = await client.get_analyst_estimates("UNKNOWN")
         assert result == []
 
     @respx.mock
-    async def test_raises_on_analyst_api_error(self, client):
+    async def test_raises_on_api_error(self, client):
         respx.get(
-            "https://financialmodelingprep.com/api/v3/analyst-estimates/TSLA",
-            params={"apikey": "test-key"},
+            "https://financialmodelingprep.com/stable/analyst-estimates",
+            params={"symbol": "TSLA", "period": "annual", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
         with pytest.raises(RuntimeError, match="FMP API error"):
             await client.get_analyst_estimates("TSLA")
+
+
+class TestPriceTargetConsensus:
+    @respx.mock
+    async def test_returns_consensus(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-consensus",
+            params={"symbol": "AAPL", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(200, json=[
+            {
+                "symbol": "AAPL",
+                "targetHigh": 250.0,
+                "targetLow": 180.0,
+                "targetConsensus": 220.5,
+                "targetMedian": 225.0,
+            }
+        ]))
+        result = await client.get_price_target_consensus("AAPL")
+        assert len(result) == 1
+        assert result[0]["targetConsensus"] == 220.5
+
+    @respx.mock
+    async def test_returns_empty_on_unknown_symbol(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-consensus",
+            params={"symbol": "UNKNOWN", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(200, json=[]))
+        result = await client.get_price_target_consensus("UNKNOWN")
+        assert result == []
+
+    @respx.mock
+    async def test_raises_on_api_error(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-consensus",
+            params={"symbol": "AAPL", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(403, text="Forbidden"))
+        with pytest.raises(RuntimeError, match="FMP API error"):
+            await client.get_price_target_consensus("AAPL")
+
+
+class TestPriceTargetSummary:
+    @respx.mock
+    async def test_returns_summary(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-summary",
+            params={"symbol": "TSLA", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(200, json=[
+            {
+                "symbol": "TSLA",
+                "lastMonthCount": 7,
+                "lastMonthAvgPriceTarget": 454.0,
+                "lastQuarterCount": 15,
+                "lastQuarterAvgPriceTarget": 465.0,
+                "allTimeCount": 247,
+                "allTimeAvgPriceTarget": 301.64,
+            }
+        ]))
+        result = await client.get_price_target_summary("TSLA")
+        assert len(result) == 1
+        assert result[0]["lastMonthCount"] == 7
+
+    @respx.mock
+    async def test_returns_empty_on_unknown_symbol(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-summary",
+            params={"symbol": "UNKNOWN", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(200, json=[]))
+        result = await client.get_price_target_summary("UNKNOWN")
+        assert result == []
+
+    @respx.mock
+    async def test_raises_on_api_error(self, client):
+        respx.get(
+            "https://financialmodelingprep.com/stable/price-target-summary",
+            params={"symbol": "TSLA", "apikey": "test-key"},
+        ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
+        with pytest.raises(RuntimeError, match="FMP API error"):
+            await client.get_price_target_summary("TSLA")

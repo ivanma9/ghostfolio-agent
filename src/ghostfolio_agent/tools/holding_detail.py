@@ -78,18 +78,29 @@ def _format_news_sentiment(news: list[dict] | None) -> list[str]:
     return lines
 
 
-def _format_insider_trading(trades: list[dict] | None) -> list[str]:
-    """Format FMP insider trading entries (up to 5)."""
-    if not trades:
-        return []
-    lines = ["", "Insider Trading:"]
-    for trade in trades[:5]:
-        name = trade.get("reportingName", "Unknown")
-        tx_type = trade.get("transactionType", "N/A")
-        shares = trade.get("securitiesTransacted", 0)
-        price = trade.get("price", 0)
-        date = trade.get("transactionDate", "N/A")
-        lines.append(f"  {date}  {name}: {tx_type}  {shares:,} shares @ ${price:.2f}")
+def _format_price_targets(consensus: list[dict] | None, summary: list[dict] | None) -> list[str]:
+    """Format FMP price target consensus and summary."""
+    lines: list[str] = []
+    if consensus:
+        c = consensus[0]
+        lines.extend([
+            "",
+            "Price Targets:",
+            f"  Consensus: ${c.get('targetConsensus', 0):,.2f}  "
+            f"Median: ${c.get('targetMedian', 0):,.2f}  "
+            f"High: ${c.get('targetHigh', 0):,.2f}  "
+            f"Low: ${c.get('targetLow', 0):,.2f}",
+        ])
+    if summary:
+        s = summary[0]
+        last_mo = s.get("lastMonthCount", 0)
+        last_mo_avg = s.get("lastMonthAvgPriceTarget", 0)
+        last_q = s.get("lastQuarterCount", 0)
+        last_q_avg = s.get("lastQuarterAvgPriceTarget", 0)
+        if not consensus:
+            lines.extend(["", "Price Targets:"])
+        lines.append(f"  Last Month: {last_mo} analysts, avg ${last_mo_avg:,.2f}")
+        lines.append(f"  Last Quarter: {last_q} analysts, avg ${last_q_avg:,.2f}")
     return lines
 
 
@@ -104,7 +115,7 @@ def create_holding_detail_tool(
         """Get a deep dive into a specific portfolio holding — cost basis, P&L, performance,
         and transaction history. When 3rd-party clients are configured, also includes external
         intelligence: upcoming earnings, analyst consensus, congressional trading activity,
-        news sentiment, and insider trading. Use when the user asks about a specific position
+        news sentiment, and price targets. Use when the user asks about a specific position
         they own, e.g. 'How is my AAPL doing?' or 'Tell me about my TSLA position'."""
         try:
             # Resolve dataSource via symbol lookup
@@ -173,8 +184,10 @@ def create_holding_detail_tool(
             task_labels.append("news")
 
         if fmp:
-            enrichment_tasks.append(_safe_fetch(fmp.get_insider_trading(resolved_symbol), "fmp_insider"))
-            task_labels.append("insider")
+            enrichment_tasks.append(_safe_fetch(fmp.get_price_target_consensus(resolved_symbol), "fmp_pt_consensus"))
+            task_labels.append("pt_consensus")
+            enrichment_tasks.append(_safe_fetch(fmp.get_price_target_summary(resolved_symbol), "fmp_pt_summary"))
+            task_labels.append("pt_summary")
 
         if enrichment_tasks:
             results = await asyncio.gather(*enrichment_tasks)
@@ -184,7 +197,7 @@ def create_holding_detail_tool(
             lines.extend(_format_analyst(enrichment.get("analyst")))
             lines.extend(_format_congressional(enrichment.get("congressional")))
             lines.extend(_format_news_sentiment(enrichment.get("news")))
-            lines.extend(_format_insider_trading(enrichment.get("insider")))
+            lines.extend(_format_price_targets(enrichment.get("pt_consensus"), enrichment.get("pt_summary")))
 
         return "\n".join(lines)
 

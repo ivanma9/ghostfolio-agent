@@ -51,14 +51,23 @@ NEWS_MOCK = [
     }
 ]
 
-INSIDER_MOCK = [
+PT_CONSENSUS_MOCK = [
     {
         "symbol": "AAPL",
-        "transactionDate": "2026-02-15",
-        "transactionType": "S-Sale",
-        "securitiesTransacted": 50000,
-        "price": 194.50,
-        "reportingName": "Tim Cook",
+        "targetHigh": 250.0,
+        "targetLow": 180.0,
+        "targetConsensus": 220.50,
+        "targetMedian": 225.0,
+    }
+]
+
+PT_SUMMARY_MOCK = [
+    {
+        "symbol": "AAPL",
+        "lastMonthCount": 7,
+        "lastMonthAvgPriceTarget": 218.0,
+        "lastQuarterCount": 15,
+        "lastQuarterAvgPriceTarget": 215.0,
     }
 ]
 
@@ -92,7 +101,8 @@ def alpha_vantage_client():
 @pytest.fixture
 def fmp_client():
     client = MagicMock()
-    client.get_insider_trading = AsyncMock(return_value=INSIDER_MOCK)
+    client.get_price_target_consensus = AsyncMock(return_value=PT_CONSENSUS_MOCK)
+    client.get_price_target_summary = AsyncMock(return_value=PT_SUMMARY_MOCK)
     return client
 
 
@@ -170,14 +180,14 @@ class TestEnrichmentSections:
         assert "Bullish" in result
 
     @pytest.mark.asyncio
-    async def test_includes_insider_trading_section(self, ghostfolio_client, fmp_client):
-        """FMP insider trades appear in output."""
+    async def test_includes_price_targets_section(self, ghostfolio_client, fmp_client):
+        """FMP price targets appear in output."""
         tool = create_holding_detail_tool(ghostfolio_client, fmp=fmp_client)
         result = await tool.ainvoke({"symbol": "AAPL"})
 
-        assert "Insider" in result
-        assert "Tim Cook" in result
-        assert "S-Sale" in result
+        assert "Price Targets" in result
+        assert "220.50" in result
+        assert "250.00" in result
 
     @pytest.mark.asyncio
     async def test_full_enrichment_all_sections_present(
@@ -201,7 +211,7 @@ class TestEnrichmentSections:
         # Alpha Vantage
         assert "News" in result or "Sentiment" in result
         # FMP
-        assert "Insider" in result
+        assert "Price Targets" in result
 
 
 class TestGracefulDegradation:
@@ -233,7 +243,8 @@ class TestGracefulDegradation:
         bad_av.get_news_sentiment = AsyncMock(side_effect=RuntimeError("AV down"))
 
         bad_fmp = MagicMock()
-        bad_fmp.get_insider_trading = AsyncMock(side_effect=RuntimeError("FMP down"))
+        bad_fmp.get_price_target_consensus = AsyncMock(side_effect=RuntimeError("FMP down"))
+        bad_fmp.get_price_target_summary = AsyncMock(side_effect=RuntimeError("FMP down"))
 
         tool = create_holding_detail_tool(
             ghostfolio_client,
@@ -252,7 +263,7 @@ class TestGracefulDegradation:
     async def test_partial_enrichment_on_mixed_errors(
         self, ghostfolio_client, fmp_client
     ):
-        """Finnhub errors, FMP works — FMP insider section present, Finnhub sections absent."""
+        """Finnhub errors, FMP works — FMP price targets present, Finnhub sections absent."""
         bad_finnhub = MagicMock()
         bad_finnhub.get_earnings_calendar = AsyncMock(side_effect=RuntimeError("Finnhub down"))
         bad_finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("Finnhub down"))
@@ -270,8 +281,8 @@ class TestGracefulDegradation:
         result = await tool.ainvoke({"symbol": "AAPL"})
 
         # FMP worked
-        assert "Insider" in result
-        assert "Tim Cook" in result
+        assert "Price Targets" in result
+        assert "220.50" in result
         # Finnhub did not work — earnings section absent
         assert "2026-04-25" not in result
         assert "Nancy Pelosi" not in result
