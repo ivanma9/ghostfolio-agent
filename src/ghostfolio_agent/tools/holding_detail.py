@@ -1,5 +1,6 @@
 import asyncio
 import structlog
+from datetime import date
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
@@ -88,6 +89,81 @@ def _format_price_targets(consensus: list[dict] | None, summary: list[dict] | No
         lines.append(f"  Last Month: {last_mo} analysts, avg ${last_mo_avg:,.2f}")
         lines.append(f"  Last Quarter: {last_q} analysts, avg ${last_q_avg:,.2f}")
     return lines
+
+
+def _format_smart_summary(market_price: float, enrichment: dict) -> list[str]:
+    """Compute actionable signals from enrichment data and return formatted lines."""
+    signals: list[str] = []
+
+    # 1. Implied Upside/Downside from FMP price target consensus
+    pt_consensus = enrichment.get("pt_consensus")
+    if pt_consensus and market_price:
+        consensus = pt_consensus[0].get("targetConsensus", 0)
+        if consensus and consensus != market_price:
+            pct = (consensus - market_price) / market_price * 100
+            if consensus > market_price:
+                signals.append(f"  Implied Upside: +{pct:.1f}% (target ${consensus:,.2f})")
+            else:
+                signals.append(f"  Implied Downside: {pct:.1f}% (target ${consensus:,.2f})")
+
+    # 2. Analyst Signal from Finnhub recommendations
+    analyst = enrichment.get("analyst")
+    if analyst:
+        entry = analyst[0]
+        strong_buy = entry.get("strongBuy", 0)
+        buy = entry.get("buy", 0)
+        hold = entry.get("hold", 0)
+        sell = entry.get("sell", 0)
+        strong_sell = entry.get("strongSell", 0)
+        bullish = strong_buy + buy
+        bearish = sell + strong_sell
+        total = bullish + hold + bearish
+        if total > 0:
+            bullish_ratio = bullish / total
+            bearish_ratio = bearish / total
+            if bullish_ratio >= 0.7:
+                label = "Strong Buy"
+            elif bullish_ratio >= 0.5:
+                label = "Buy"
+            elif bearish_ratio >= 0.5:
+                label = "Sell"
+            else:
+                label = "Hold"
+            signals.append(f"  Analyst Signal: {label} ({bullish} of {total} analysts bullish)")
+
+    # 3. Sentiment Score from Alpha Vantage news
+    news = enrichment.get("news")
+    if news:
+        bullish_labels = {"Bullish", "Somewhat_Bullish", "Somewhat-Bullish"}
+        bearish_labels = {"Bearish", "Somewhat_Bearish", "Somewhat-Bearish"}
+        total = len(news)
+        bullish_count = sum(1 for a in news if a.get("overall_sentiment_label") in bullish_labels)
+        bearish_count = sum(1 for a in news if a.get("overall_sentiment_label") in bearish_labels)
+        if bullish_count > bearish_count:
+            signals.append(f"  Sentiment: Bullish ({bullish_count} of {total} articles positive)")
+        elif bearish_count > bullish_count:
+            signals.append(f"  Sentiment: Bearish ({bearish_count} of {total} articles negative)")
+        else:
+            signals.append(f"  Sentiment: Neutral ({total} articles reviewed)")
+
+    # 4. Earnings Proximity — within 14 days
+    earnings = enrichment.get("earnings")
+    if earnings:
+        today = date.today()
+        for entry in earnings:
+            date_str = entry.get("date", "")
+            try:
+                earnings_date = date.fromisoformat(date_str)
+                days_until = (earnings_date - today).days
+                if 0 <= days_until <= 14:
+                    signals.append(f"  Earnings Alert: Reporting in {days_until} days ({date_str})")
+                    break
+            except (ValueError, TypeError):
+                continue
+
+    if not signals:
+        return []
+    return ["", "Smart Summary:"] + signals
 
 
 def create_holding_detail_tool(
@@ -181,6 +257,7 @@ def create_holding_detail_tool(
             lines.extend(_format_analyst(enrichment.get("analyst")))
             lines.extend(_format_news_sentiment(enrichment.get("news")))
             lines.extend(_format_price_targets(enrichment.get("pt_consensus"), enrichment.get("pt_summary")))
+            lines.extend(_format_smart_summary(market_price, enrichment))
 
         return "\n".join(lines)
 
