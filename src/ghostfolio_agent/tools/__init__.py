@@ -8,6 +8,8 @@ from ghostfolio_agent.tools.symbol_lookup import create_symbol_lookup_tool
 from ghostfolio_agent.tools.portfolio_performance import create_portfolio_performance_tool
 from ghostfolio_agent.tools.risk_analysis import create_risk_analysis_tool
 from ghostfolio_agent.tools.paper_trade import create_paper_trade_tool
+from ghostfolio_agent.tools.holding_detail import create_holding_detail_tool
+from ghostfolio_agent.tools.activity_log import create_activity_log_tool
 
 
 def create_tools(
@@ -24,6 +26,7 @@ def create_tools(
         create_portfolio_performance_tool(client),
         create_risk_analysis_tool(client),
         create_paper_trade_tool(client),
+        create_holding_detail_tool(client),
+        create_activity_log_tool(client),
     ]
-    # 3rd party enriched tools will be added here in future tasks
     return tools
