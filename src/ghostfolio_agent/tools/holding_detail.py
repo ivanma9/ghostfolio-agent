@@ -144,7 +144,7 @@ def _format_smart_summary(market_price: float, enrichment: dict) -> list[str]:
         elif bearish_count > bullish_count:
             signals.append(f"  Sentiment: Bearish ({bearish_count} of {total} articles negative)")
         else:
-            signals.append(f"  Sentiment: Neutral ({total} articles reviewed)")
+            signals.append(f"  Sentiment: Neutral ({total} articles)")
 
     # 4. Earnings Proximity — within 14 days
     earnings = enrichment.get("earnings")
