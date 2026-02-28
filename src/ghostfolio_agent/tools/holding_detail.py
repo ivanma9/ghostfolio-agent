@@ -25,12 +25,12 @@ def _format_earnings(earnings: list[dict] | None) -> list[str]:
         return []
     lines = ["", "Upcoming Earnings:"]
     for entry in earnings[:3]:
-        date = entry.get("date", "N/A")
+        earn_date_str = entry.get("date", "N/A")
         eps_est = entry.get("epsEstimate")
         eps_act = entry.get("epsActual")
         eps_est_str = f"${eps_est:.2f}" if eps_est is not None else "N/A"
         eps_act_str = f"${eps_act:.2f}" if eps_act is not None else "N/A"
-        lines.append(f"  {date}  EPS Est: {eps_est_str}  EPS Actual: {eps_act_str}")
+        lines.append(f"  {earn_date_str}  EPS Est: {eps_est_str}  EPS Actual: {eps_act_str}")
     return lines
 
 

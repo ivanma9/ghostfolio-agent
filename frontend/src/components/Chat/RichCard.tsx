@@ -767,7 +767,7 @@ function HoldingDetailCard({ data }: { data: HoldingDetailData }) {
             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
               data.analystSignal.label === 'Strong Buy' || data.analystSignal.label === 'Buy'
                 ? 'bg-emerald-500/20 text-emerald-400'
-                : data.analystSignal.label === 'Sell'
+                : data.analystSignal.label === 'Sell' || data.analystSignal.label === 'Strong Sell'
                   ? 'bg-red-500/20 text-red-400'
                   : 'bg-yellow-500/20 text-yellow-400'
             }`}>
