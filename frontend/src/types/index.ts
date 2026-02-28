@@ -114,3 +114,30 @@ export interface PaperTradeResult {
   total: number
   cashRemaining: number
 }
+
+// Holding Detail (Smart Deep Dive)
+export interface HoldingDetailData {
+  name: string
+  symbol: string
+  quantity: number
+  marketPrice: number
+  currency: string
+  avgCost: number
+  totalInvested: number
+  currentValue: number
+  unrealizedPnl: number
+  unrealizedPnlPercent: number
+  dividends: number | null
+  firstBuy: string
+  transactionCount: number
+  // Enrichment
+  earnings: Array<{ date: string; epsEstimate: string; epsActual: string }> | null
+  analystCounts: { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; period: string } | null
+  news: Array<{ sentiment: string; title: string; source: string }> | null
+  priceTargets: { consensus: number; median: number; high: number; low: number } | null
+  // Smart Summary signals
+  impliedMove: { direction: 'upside' | 'downside'; percent: number; target: number } | null
+  analystSignal: { label: string; bullish: number; total: number } | null
+  sentiment: { label: 'Bullish' | 'Bearish' | 'Neutral'; count: number; total: number } | null
+  earningsAlert: { daysUntil: number; date: string } | null
+}

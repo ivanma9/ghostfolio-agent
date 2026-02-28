@@ -261,3 +261,112 @@ class TestGracefulDegradation:
         # Finnhub did not work — earnings section absent
         assert "2026-04-25" not in result
         assert "Nancy Pelosi" not in result
+
+
+class TestSmartSummary:
+    @pytest.mark.asyncio
+    async def test_implied_upside_displayed(self, ghostfolio_client, fmp_client):
+        """market=195.50, consensus=220.50 → '+12.8%' shown in Smart Summary."""
+        tool = create_holding_detail_tool(ghostfolio_client, fmp=fmp_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Implied Upside" in result
+        assert "+12.8%" in result
+
+    @pytest.mark.asyncio
+    async def test_analyst_signal_strong_buy(self, ghostfolio_client, finnhub_client):
+        """12 strongBuy + 18 buy = 30 bullish of 37 → 'Strong Buy' '30 of 37'."""
+        tool = create_holding_detail_tool(ghostfolio_client, finnhub=finnhub_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Analyst Signal" in result
+        assert "Strong Buy" in result
+        assert "30 of 37" in result
+
+    @pytest.mark.asyncio
+    async def test_sentiment_score_bullish(self, ghostfolio_client, alpha_vantage_client):
+        """1 Bullish article → 'Bullish' '1 of 1' in Smart Summary."""
+        tool = create_holding_detail_tool(ghostfolio_client, alpha_vantage=alpha_vantage_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Sentiment" in result
+        assert "Bullish" in result
+        assert "1 of 1" in result
+
+    @pytest.mark.asyncio
+    async def test_earnings_proximity_flag(self, ghostfolio_client):
+        """Earnings 8 days away → 'Earnings Alert' '8 days'."""
+        from datetime import date, timedelta
+        near_date = (date.today() + timedelta(days=8)).isoformat()
+        near_earnings = [{"date": near_date, "epsEstimate": 2.35, "epsActual": None, "symbol": "AAPL"}]
+
+        finnhub = MagicMock()
+        finnhub.get_earnings_calendar = AsyncMock(return_value=near_earnings)
+        finnhub.get_analyst_recommendations = AsyncMock(return_value=None)
+
+        tool = create_holding_detail_tool(ghostfolio_client, finnhub=finnhub)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Earnings Alert" in result
+        assert "8 days" in result
+
+    @pytest.mark.asyncio
+    async def test_no_earnings_proximity_when_far(self, ghostfolio_client):
+        """Earnings 45 days away → no 'Earnings Alert'."""
+        from datetime import date, timedelta
+        far_date = (date.today() + timedelta(days=45)).isoformat()
+        far_earnings = [{"date": far_date, "epsEstimate": 2.35, "epsActual": None, "symbol": "AAPL"}]
+
+        finnhub = MagicMock()
+        finnhub.get_earnings_calendar = AsyncMock(return_value=far_earnings)
+        finnhub.get_analyst_recommendations = AsyncMock(return_value=None)
+
+        tool = create_holding_detail_tool(ghostfolio_client, finnhub=finnhub)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Earnings Alert" not in result
+
+    @pytest.mark.asyncio
+    async def test_implied_downside_when_target_below_price(self, ghostfolio_client):
+        """consensus=170, market=195.50 → 'Implied Downside' '-13.0%'."""
+        fmp = MagicMock()
+        fmp.get_price_target_consensus = AsyncMock(return_value=[{
+            "symbol": "AAPL",
+            "targetHigh": 200.0,
+            "targetLow": 150.0,
+            "targetConsensus": 170.0,
+            "targetMedian": 175.0,
+        }])
+        fmp.get_price_target_summary = AsyncMock(return_value=None)
+
+        tool = create_holding_detail_tool(ghostfolio_client, fmp=fmp)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Implied Downside" in result
+        assert "-13.0%" in result
+
+    @pytest.mark.asyncio
+    async def test_smart_summary_absent_without_enrichment(self, ghostfolio_client):
+        """No 3rd party clients → no 'Smart Summary' section."""
+        tool = create_holding_detail_tool(ghostfolio_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" not in result
+
+    @pytest.mark.asyncio
+    async def test_smart_summary_partial_data(self, ghostfolio_client, fmp_client):
+        """Only FMP provided → has implied upside but no analyst signal or earnings alert."""
+        tool = create_holding_detail_tool(ghostfolio_client, fmp=fmp_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Implied Upside" in result
+        # No Finnhub data → no analyst signal
+        assert "Analyst Signal" not in result
+        # No Finnhub earnings → no earnings alert
+        assert "Earnings Alert" not in result
