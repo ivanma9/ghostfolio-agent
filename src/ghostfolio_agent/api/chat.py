@@ -1,3 +1,5 @@
+import asyncio
+
 import structlog
 from fastapi import APIRouter
 from langgraph.checkpoint.memory import InMemorySaver
@@ -108,9 +110,20 @@ async def chat(request: ChatRequest):
         config = {"configurable": {"thread_id": request.session_id}}
 
         try:
-            result = await agent.ainvoke(
-                {"messages": [HumanMessage(content=content)]},
-                config=config,
+            async with asyncio.timeout(90):
+                result = await agent.ainvoke(
+                    {"messages": [HumanMessage(content=content)]},
+                    config=config,
+                )
+        except TimeoutError:
+            logger.warning("chat_request_timeout", session_id=request.session_id)
+            return ChatResponse(
+                response="The request took too long. Please try again — if the issue persists, try a different model.",
+                session_id=request.session_id,
+                tool_calls=[],
+                tool_outputs=[],
+                confidence="low",
+                citations=[],
             )
         except GraphInterrupt as gi:
             # Human-in-the-loop: activity_log interrupted for confirmation

@@ -97,6 +97,7 @@ def create_agent(
         base_url="https://openrouter.ai/api/v1",
         temperature=0,
         max_tokens=4096,
+        request_timeout=60,
     )
     tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp)
     agent = create_react_agent(
