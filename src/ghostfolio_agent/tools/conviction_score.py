@@ -1,6 +1,14 @@
 """Conviction Score — composite 0-100 score from multiple market signals."""
 
+import asyncio
+import structlog
+from langchain_core.tools import tool
+from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
+from ghostfolio_agent.clients.fmp import FMPClient
 from datetime import date
+
+logger = structlog.get_logger()
 
 
 def compute_analyst_score(
@@ -163,3 +171,142 @@ def compute_composite(
         })
 
     return composite, label, details
+
+
+async def _safe_fetch(coro, label: str):
+    """Run a coroutine and return None on any exception."""
+    try:
+        return await coro
+    except Exception as exc:
+        logger.warning("conviction_fetch_failed", label=label, error=str(exc))
+        return None
+
+
+# Component weights
+ANALYST_WEIGHT = 40
+PRICE_TARGET_WEIGHT = 30
+SENTIMENT_WEIGHT = 20
+EARNINGS_WEIGHT = 10
+
+# Display names for output
+COMPONENT_NAMES = {
+    "analyst": "Analyst Consensus",
+    "price_target": "Price Target Upside",
+    "sentiment": "News Sentiment",
+    "earnings": "Earnings Proximity",
+}
+
+
+def create_conviction_score_tool(
+    finnhub: FinnhubClient | None = None,
+    alpha_vantage: AlphaVantageClient | None = None,
+    fmp: FMPClient | None = None,
+):
+    @tool
+    async def conviction_score(symbol: str) -> str:
+        """Get a conviction score (0-100) for a stock symbol based on analyst consensus,
+        price target upside, news sentiment, and earnings proximity. Use when the user
+        asks about signal strength, conviction, or is evaluating a trade decision."""
+        if not finnhub and not alpha_vantage and not fmp:
+            return "Conviction score is not available — no data sources configured."
+
+        # Parallel fetch all data
+        tasks = []
+        task_labels = []
+
+        if finnhub:
+            tasks.append(_safe_fetch(finnhub.get_quote(symbol), "quote"))
+            task_labels.append("quote")
+            tasks.append(_safe_fetch(finnhub.get_analyst_recommendations(symbol), "analyst"))
+            task_labels.append("analyst")
+            tasks.append(_safe_fetch(finnhub.get_earnings_calendar(symbol), "earnings"))
+            task_labels.append("earnings")
+
+        if alpha_vantage:
+            tasks.append(_safe_fetch(alpha_vantage.get_news_sentiment(symbol), "news"))
+            task_labels.append("news")
+
+        if fmp:
+            tasks.append(_safe_fetch(fmp.get_price_target_consensus(symbol), "pt_consensus"))
+            task_labels.append("pt_consensus")
+
+        results = await asyncio.gather(*tasks)
+        data = dict(zip(task_labels, results))
+
+        # Get market price
+        quote = data.get("quote")
+        market_price = quote.get("c", 0) if quote else 0
+
+        # Compute sub-scores
+        components = []
+        missing = []
+
+        # Analyst
+        analyst_score, analyst_expl = compute_analyst_score(data.get("analyst"))
+        if analyst_score is not None:
+            components.append(("analyst", analyst_score, analyst_expl, ANALYST_WEIGHT))
+        else:
+            missing.append("Analyst Consensus")
+
+        # Price target
+        pt_score, pt_expl = compute_price_target_score(data.get("pt_consensus"), market_price)
+        if pt_score is not None:
+            components.append(("price_target", pt_score, pt_expl, PRICE_TARGET_WEIGHT))
+        else:
+            missing.append("Price Target Upside")
+
+        # Sentiment
+        sent_score, sent_expl = compute_sentiment_score(data.get("news"))
+        if sent_score is not None:
+            components.append(("sentiment", sent_score, sent_expl, SENTIMENT_WEIGHT))
+        else:
+            missing.append("News Sentiment")
+
+        # Earnings (always returns a score)
+        earn_score, earn_expl = compute_earnings_score(data.get("earnings"))
+        components.append(("earnings", earn_score, earn_expl, EARNINGS_WEIGHT))
+
+        # Composite
+        composite, label, details = compute_composite(components)
+
+        if composite is None:
+            return f"Conviction score for {symbol}: Insufficient data to compute score."
+
+        # Format output
+        lines = [
+            f"Conviction Score: {symbol}",
+            "",
+            f"  Score: {composite}/100 — {label}",
+            "",
+            "  Components:",
+        ]
+
+        for detail in details:
+            display_name = COMPONENT_NAMES.get(detail["name"], detail["name"])
+            lines.append(
+                f"    {display_name + ':':25s} {detail['score']}/100 (weight {detail['weight']}%)  "
+                f"— {detail['explanation']}"
+            )
+
+        # Show missing components
+        for name in missing:
+            lines.append(f"    {name + ':':25s} N/A")
+
+        # Data sources
+        sources = []
+        if finnhub:
+            sources.append("Finnhub")
+        if alpha_vantage:
+            sources.append("Alpha Vantage")
+        if fmp:
+            sources.append("FMP")
+        lines.append("")
+        lines.append(f"  Data Sources: {', '.join(sources)}")
+        if missing:
+            lines.append(f"  Missing: {', '.join(missing)}")
+        else:
+            lines.append("  Missing: None")
+
+        return "\n".join(lines)
+
+    return conviction_score

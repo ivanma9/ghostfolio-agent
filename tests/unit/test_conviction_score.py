@@ -244,3 +244,100 @@ class TestScoreToLabel:
     def test_strong_buy(self):
         assert score_to_label(81) == "Strong Buy"
         assert score_to_label(100) == "Strong Buy"
+
+
+from unittest.mock import AsyncMock, MagicMock
+from ghostfolio_agent.tools.conviction_score import create_conviction_score_tool
+
+
+ANALYST_MOCK = [
+    {"period": "2026-03-01", "strongBuy": 12, "buy": 18, "hold": 6, "sell": 1, "strongSell": 0}
+]
+
+NEWS_MOCK = [
+    {"title": "Apple beats earnings", "overall_sentiment_label": "Bullish", "source": "Reuters"},
+    {"title": "Tech rally continues", "overall_sentiment_label": "Somewhat-Bullish", "source": "CNBC"},
+    {"title": "Market concerns", "overall_sentiment_label": "Bearish", "source": "WSJ"},
+]
+
+PT_CONSENSUS_MOCK = [
+    {"symbol": "AAPL", "targetConsensus": 220.50}
+]
+
+QUOTE_MOCK = {"c": 195.50, "h": 198.0, "l": 193.0, "o": 194.0, "pc": 193.50}
+
+
+class TestConvictionScoreTool:
+    @pytest.mark.asyncio
+    async def test_full_score_output(self):
+        """All clients configured — returns score with all 4 components."""
+        finnhub = MagicMock()
+        finnhub.get_analyst_recommendations = AsyncMock(return_value=ANALYST_MOCK)
+        finnhub.get_earnings_calendar = AsyncMock(return_value=[])
+        finnhub.get_quote = AsyncMock(return_value=QUOTE_MOCK)
+
+        alpha_vantage = MagicMock()
+        alpha_vantage.get_news_sentiment = AsyncMock(return_value=NEWS_MOCK)
+
+        fmp = MagicMock()
+        fmp.get_price_target_consensus = AsyncMock(return_value=PT_CONSENSUS_MOCK)
+
+        tool = create_conviction_score_tool(
+            finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp
+        )
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Conviction Score" in result
+        assert "/100" in result
+        assert "Analyst Consensus" in result
+        assert "Price Target Upside" in result
+        assert "News Sentiment" in result
+        assert "Earnings Proximity" in result
+
+    @pytest.mark.asyncio
+    async def test_missing_alpha_vantage(self):
+        """No Alpha Vantage — 3 components, sentiment shows N/A."""
+        finnhub = MagicMock()
+        finnhub.get_analyst_recommendations = AsyncMock(return_value=ANALYST_MOCK)
+        finnhub.get_earnings_calendar = AsyncMock(return_value=[])
+        finnhub.get_quote = AsyncMock(return_value=QUOTE_MOCK)
+
+        fmp = MagicMock()
+        fmp.get_price_target_consensus = AsyncMock(return_value=PT_CONSENSUS_MOCK)
+
+        tool = create_conviction_score_tool(finnhub=finnhub, fmp=fmp)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Conviction Score" in result
+        assert "/100" in result
+        assert "N/A" in result
+
+    @pytest.mark.asyncio
+    async def test_no_clients(self):
+        """No clients configured — error message."""
+        tool = create_conviction_score_tool()
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "not available" in result.lower() or "no data sources" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_api_errors_graceful(self):
+        """All APIs error — graceful degradation."""
+        finnhub = MagicMock()
+        finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("down"))
+        finnhub.get_earnings_calendar = AsyncMock(side_effect=RuntimeError("down"))
+        finnhub.get_quote = AsyncMock(side_effect=RuntimeError("down"))
+
+        alpha_vantage = MagicMock()
+        alpha_vantage.get_news_sentiment = AsyncMock(side_effect=RuntimeError("down"))
+
+        fmp = MagicMock()
+        fmp.get_price_target_consensus = AsyncMock(side_effect=RuntimeError("down"))
+
+        tool = create_conviction_score_tool(
+            finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp
+        )
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        # Should not crash, should indicate insufficient data or show partial results
+        assert "down" not in result.lower()
