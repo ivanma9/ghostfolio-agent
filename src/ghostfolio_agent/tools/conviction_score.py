@@ -31,3 +31,29 @@ def compute_analyst_score(
     bullish = strong_buy + buy
     explanation = f"{bullish} of {total} analysts bullish"
     return score, explanation
+
+
+def compute_price_target_score(
+    consensus_data: list[dict] | None,
+    market_price: float,
+) -> tuple[int | None, str]:
+    """Score price target upside 0-100.
+
+    Linear mapping: +30% upside = 100, 0% = 50, -30% downside = 0.
+    Clamped to [0, 100].
+    """
+    if not consensus_data or not market_price:
+        return None, "No price target data"
+
+    target = consensus_data[0].get("targetConsensus", 0)
+    if not target:
+        return None, "No price target data"
+
+    upside_pct = (target - market_price) / market_price * 100
+    # Linear: -30% → 0, 0% → 50, +30% → 100
+    score = round(50 + (upside_pct / 30) * 50)
+    score = max(0, min(100, score))
+
+    sign = "+" if upside_pct >= 0 else ""
+    explanation = f"{sign}{upside_pct:.1f}% implied upside (${target:,.2f} target)"
+    return score, explanation
