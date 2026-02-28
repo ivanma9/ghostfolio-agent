@@ -18,11 +18,11 @@ Every task MUST follow this sequence before the session ends. No exceptions.
 - If a task reveals issues in a previous task, fix and commit those first before continuing.
 - Every session should end with a clean `git status` (no uncommitted changes).
 
-## Working with Worktrees
+## Branching Strategy
 
-- Feature work happens in `.worktrees/` directory
-- Always verify the worktree branch before making changes
-- Run tests from the worktree root
+- **Single-session features**: Work on a feature branch directly (no worktree). Merge to main when done.
+- **Multi-session or parallel features**: Use worktrees in `.worktrees/` for isolation.
+- Don't copy `.env` into worktrees — use symlinks or env vars instead.
 
 ## Test Commands
 
