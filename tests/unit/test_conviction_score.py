@@ -111,7 +111,7 @@ class TestSentimentScore:
         assert score == 0
 
     def test_mixed(self):
-        """3 bullish, 1 neutral, 1 bearish → 60."""
+        """3 bullish, 1 neutral, 1 bearish → 70. (3*1 + 1*0.5 + 1*0) / 5 = 0.7."""
         news = [
             {"overall_sentiment_label": "Bullish"},
             {"overall_sentiment_label": "Somewhat-Bullish"},
@@ -120,12 +120,12 @@ class TestSentimentScore:
             {"overall_sentiment_label": "Bearish"},
         ]
         score, explanation = compute_sentiment_score(news)
-        assert score == 60
+        assert score == 70
         assert "3 of 5" in explanation
 
     def test_all_neutral(self):
         """All neutral → 50."""
-        news = [{"overall_sentinel_label": "Neutral"}] * 4
+        news = [{"overall_sentiment_label": "Neutral"}] * 4
         score, explanation = compute_sentiment_score(news)
         assert score == 50
 

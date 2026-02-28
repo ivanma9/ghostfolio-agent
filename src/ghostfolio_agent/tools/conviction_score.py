@@ -75,15 +75,14 @@ def compute_sentiment_score(
         return None, "No news data"
 
     bullish_labels = {"Bullish", "Somewhat_Bullish", "Somewhat-Bullish"}
-    bearish_labels = {"Bearish", "Somewhat_Bearish", "Somewhat-Bearish", "Neutral"}
+    bearish_labels = {"Bearish", "Somewhat_Bearish", "Somewhat-Bearish"}
 
     total = len(news_data)
     bullish = sum(1 for a in news_data if a.get("overall_sentiment_label") in bullish_labels)
     bearish = sum(1 for a in news_data if a.get("overall_sentiment_label") in bearish_labels)
-    # Articles with no recognized label (missing key) are truly neutral → 0.5
     neutral = total - bullish - bearish
 
-    # Score: bullish=1, truly-neutral (unrecognized)=0.5, bearish/Neutral=0 per article
+    # Score: bullish=1, neutral=0.5, bearish=0 per article
     raw = (bullish * 1.0 + neutral * 0.5 + bearish * 0.0) / total
     score = round(raw * 100)
     score = max(0, min(100, score))
