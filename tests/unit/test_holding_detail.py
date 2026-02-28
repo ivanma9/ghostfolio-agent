@@ -31,16 +31,6 @@ ANALYST_MOCK = [
     {"period": "2026-03-01", "strongBuy": 12, "buy": 18, "hold": 6, "sell": 1, "strongSell": 0}
 ]
 
-CONGRESSIONAL_MOCK = [
-    {
-        "symbol": "AAPL",
-        "transactionDate": "2026-02-10",
-        "transactionAmount": "$1,001 - $15,000",
-        "transactionType": "Purchase",
-        "representative": "Nancy Pelosi",
-    }
-]
-
 NEWS_MOCK = [
     {
         "title": "Apple beats earnings",
@@ -87,7 +77,6 @@ def finnhub_client():
     client = MagicMock()
     client.get_earnings_calendar = AsyncMock(return_value=EARNINGS_MOCK)
     client.get_analyst_recommendations = AsyncMock(return_value=ANALYST_MOCK)
-    client.get_congressional_trading = AsyncMock(return_value=CONGRESSIONAL_MOCK)
     return client
 
 
@@ -160,16 +149,6 @@ class TestEnrichmentSections:
         assert "18" in result
 
     @pytest.mark.asyncio
-    async def test_includes_congressional_section(self, ghostfolio_client, finnhub_client):
-        """Finnhub congressional trades appear in output."""
-        tool = create_holding_detail_tool(ghostfolio_client, finnhub=finnhub_client)
-        result = await tool.ainvoke({"symbol": "AAPL"})
-
-        assert "Congressional" in result
-        assert "Nancy Pelosi" in result
-        assert "Purchase" in result
-
-    @pytest.mark.asyncio
     async def test_includes_news_sentiment_section(self, ghostfolio_client, alpha_vantage_client):
         """Alpha Vantage news sentiment appears in output."""
         tool = create_holding_detail_tool(ghostfolio_client, alpha_vantage=alpha_vantage_client)
@@ -207,7 +186,6 @@ class TestEnrichmentSections:
         # Finnhub sections
         assert "Earnings" in result
         assert "Analyst" in result
-        assert "Congressional" in result
         # Alpha Vantage
         assert "News" in result or "Sentiment" in result
         # FMP
@@ -221,7 +199,6 @@ class TestGracefulDegradation:
         bad_finnhub = MagicMock()
         bad_finnhub.get_earnings_calendar = AsyncMock(side_effect=RuntimeError("Finnhub down"))
         bad_finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("Finnhub down"))
-        bad_finnhub.get_congressional_trading = AsyncMock(side_effect=RuntimeError("Finnhub down"))
 
         tool = create_holding_detail_tool(ghostfolio_client, finnhub=bad_finnhub)
         result = await tool.ainvoke({"symbol": "AAPL"})
@@ -237,7 +214,6 @@ class TestGracefulDegradation:
         bad_finnhub = MagicMock()
         bad_finnhub.get_earnings_calendar = AsyncMock(side_effect=RuntimeError("Finnhub down"))
         bad_finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("Finnhub down"))
-        bad_finnhub.get_congressional_trading = AsyncMock(side_effect=RuntimeError("Finnhub down"))
 
         bad_av = MagicMock()
         bad_av.get_news_sentiment = AsyncMock(side_effect=RuntimeError("AV down"))
@@ -267,7 +243,6 @@ class TestGracefulDegradation:
         bad_finnhub = MagicMock()
         bad_finnhub.get_earnings_calendar = AsyncMock(side_effect=RuntimeError("Finnhub down"))
         bad_finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("Finnhub down"))
-        bad_finnhub.get_congressional_trading = AsyncMock(side_effect=RuntimeError("Finnhub down"))
 
         bad_av = MagicMock()
         bad_av.get_news_sentiment = AsyncMock(side_effect=RuntimeError("AV down"))

@@ -51,20 +51,6 @@ def _format_analyst(analyst: list[dict] | None) -> list[str]:
     ]
 
 
-def _format_congressional(trades: list[dict] | None) -> list[str]:
-    """Format Finnhub congressional trading activity (up to 5 entries)."""
-    if not trades:
-        return []
-    lines = ["", "Congressional Trading:"]
-    for trade in trades[:5]:
-        rep = trade.get("representative", "Unknown")
-        tx_type = trade.get("transactionType", "N/A")
-        amount = trade.get("transactionAmount", "N/A")
-        date = trade.get("transactionDate", "N/A")
-        lines.append(f"  {date}  {rep}: {tx_type}  {amount}")
-    return lines
-
-
 def _format_news_sentiment(news: list[dict] | None) -> list[str]:
     """Format Alpha Vantage news sentiment entries (up to 5)."""
     if not news:
@@ -114,9 +100,9 @@ def create_holding_detail_tool(
     async def holding_detail(symbol: str) -> str:
         """Get a deep dive into a specific portfolio holding — cost basis, P&L, performance,
         and transaction history. When 3rd-party clients are configured, also includes external
-        intelligence: upcoming earnings, analyst consensus, congressional trading activity,
-        news sentiment, and price targets. Use when the user asks about a specific position
-        they own, e.g. 'How is my AAPL doing?' or 'Tell me about my TSLA position'."""
+        intelligence: upcoming earnings, analyst consensus, news sentiment, and price targets.
+        Use when the user asks about a specific position they own, e.g. 'How is my AAPL doing?'
+        or 'Tell me about my TSLA position'."""
         try:
             # Resolve dataSource via symbol lookup
             lookup = await client.lookup_symbol(symbol)
@@ -176,8 +162,6 @@ def create_holding_detail_tool(
             task_labels.append("earnings")
             enrichment_tasks.append(_safe_fetch(finnhub.get_analyst_recommendations(resolved_symbol), "finnhub_analyst"))
             task_labels.append("analyst")
-            enrichment_tasks.append(_safe_fetch(finnhub.get_congressional_trading(resolved_symbol), "finnhub_congressional"))
-            task_labels.append("congressional")
 
         if alpha_vantage:
             enrichment_tasks.append(_safe_fetch(alpha_vantage.get_news_sentiment(resolved_symbol), "av_news"))
@@ -195,7 +179,6 @@ def create_holding_detail_tool(
 
             lines.extend(_format_earnings(enrichment.get("earnings")))
             lines.extend(_format_analyst(enrichment.get("analyst")))
-            lines.extend(_format_congressional(enrichment.get("congressional")))
             lines.extend(_format_news_sentiment(enrichment.get("news")))
             lines.extend(_format_price_targets(enrichment.get("pt_consensus"), enrichment.get("pt_summary")))
 

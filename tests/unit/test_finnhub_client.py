@@ -9,52 +9,6 @@ def client():
     return FinnhubClient(api_key="test-key")
 
 
-class TestCongressionalTrading:
-    @respx.mock
-    async def test_returns_congressional_trades(self, client):
-        respx.get(
-            "https://finnhub.io/api/v1/stock/congressional-trading",
-            params={"symbol": "NVDA", "token": "test-key"},
-        ).mock(return_value=httpx.Response(200, json={
-            "symbol": "NVDA",
-            "data": [
-                {
-                    "transactionDate": "2026-01-15",
-                    "transactionType": "Purchase",
-                    "name": "Nancy Pelosi",
-                    "amountFrom": 500000,
-                    "amountTo": 1000000,
-                    "assetName": "NVIDIA Corp",
-                    "ownerType": "joint",
-                    "position": "Representative",
-                    "filingDate": "2026-01-30",
-                }
-            ],
-        }))
-        result = await client.get_congressional_trading("NVDA")
-        assert len(result) == 1
-        assert result[0]["name"] == "Nancy Pelosi"
-        assert result[0]["transactionType"] == "Purchase"
-
-    @respx.mock
-    async def test_returns_empty_list_on_no_data(self, client):
-        respx.get(
-            "https://finnhub.io/api/v1/stock/congressional-trading",
-            params={"symbol": "UNKNOWN", "token": "test-key"},
-        ).mock(return_value=httpx.Response(200, json={"symbol": "UNKNOWN", "data": []}))
-        result = await client.get_congressional_trading("UNKNOWN")
-        assert result == []
-
-    @respx.mock
-    async def test_raises_on_api_error(self, client):
-        respx.get(
-            "https://finnhub.io/api/v1/stock/congressional-trading",
-            params={"symbol": "NVDA", "token": "test-key"},
-        ).mock(return_value=httpx.Response(401, text="Unauthorized"))
-        with pytest.raises(RuntimeError, match="Finnhub API error"):
-            await client.get_congressional_trading("NVDA")
-
-
 class TestAnalystRecommendations:
     @respx.mock
     async def test_returns_recommendations(self, client):

@@ -3,7 +3,7 @@ from typing import Any, cast
 
 
 class FinnhubClient:
-    """Async HTTP client for Finnhub API (congressional trades, analyst recs, earnings)."""
+    """Async HTTP client for Finnhub API (analyst recs, earnings)."""
 
     BASE_URL = "https://finnhub.io/api/v1"
 
@@ -24,11 +24,6 @@ class FinnhubClient:
                 f"for {response.url} — {response.text[:500]}"
             )
         return response.json()
-
-    async def get_congressional_trading(self, symbol: str) -> list[dict[str, Any]]:
-        """Get congressional trading activity for a symbol."""
-        result = await self._get("/stock/congressional-trading", params={"symbol": symbol})
-        return cast(list[dict[str, Any]], result.get("data", []))
 
     async def get_analyst_recommendations(self, symbol: str) -> list[dict[str, Any]]:
         """Get analyst recommendation trends for a symbol."""
