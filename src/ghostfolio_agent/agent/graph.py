@@ -29,7 +29,7 @@ Available tools:
 - portfolio_performance: Get returns over time (1d, 1w, 1m, 3m, 6m, 1y, ytd, all)
 - risk_analysis: Analyze concentration risk, sector breakdown, and currency exposure
 - paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio. Supports 'buy 10 AAPL' or 'buy $300 AAPL'. Fetches prices automatically.
-- holding_detail: Deep dive into a specific holding — cost basis, P&L, performance
+- holding_detail: Deep dive into a specific holding — cost basis, P&L, plus earnings dates, analyst consensus, congressional trades, insider activity, and news sentiment
 - activity_log: Record real portfolio activities (buy, sell, dividend) in Ghostfolio
 
 For recording real trades, use activity_log. Always confirm details with the user before recording.

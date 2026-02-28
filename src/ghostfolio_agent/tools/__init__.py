@@ -26,7 +26,7 @@ def create_tools(
         create_portfolio_performance_tool(client),
         create_risk_analysis_tool(client),
         create_paper_trade_tool(client),
-        create_holding_detail_tool(client),
+        create_holding_detail_tool(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp),
         create_activity_log_tool(client),
     ]
     return tools
