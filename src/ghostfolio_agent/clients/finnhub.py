@@ -33,3 +33,11 @@ class FinnhubClient:
         """Get upcoming earnings dates and estimates for a symbol."""
         result = await self._get("/calendar/earnings", params={"symbol": symbol})
         return cast(list[dict[str, Any]], result.get("earningsCalendar", []))
+
+    async def get_quote(self, symbol: str) -> dict[str, Any]:
+        """Get real-time quote for a symbol.
+
+        Returns dict with keys: c (current), h (high), l (low), o (open),
+        pc (prev close), dp (change %), d (change).
+        """
+        return cast(dict[str, Any], await self._get("/quote", params={"symbol": symbol}))
