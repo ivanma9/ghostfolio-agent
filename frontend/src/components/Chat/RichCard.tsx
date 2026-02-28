@@ -1,5 +1,5 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { Holding, Transaction, SymbolInfo, PerformanceData, RiskData, PaperPortfolio, PaperTradeResult } from '../../types'
+import type { Holding, Transaction, SymbolInfo, PerformanceData, RiskData, PaperPortfolio, PaperTradeResult, HoldingDetailData } from '../../types'
 
 // ── Parsers ──────────────────────────────────────────────────────────────────
 
@@ -251,6 +251,121 @@ export function parsePaperTrade(text: string): PaperTradeResult | null {
   const cashRemaining = cashMatch ? parseFloat(cashMatch[1].replace(/,/g, '')) : 0
 
   return { action, symbol, quantity, price, total, cashRemaining }
+}
+
+export function parseHoldingDetail(text: string): HoldingDetailData | null {
+  const headerMatch = text.match(/Holding Detail:\s*(.+?)\s*\((\w+)\)/)
+  if (!headerMatch) return null
+
+  const name = headerMatch[1]
+  const symbol = headerMatch[2]
+
+  const num = (pattern: RegExp): number => {
+    const m = text.match(pattern)
+    return m ? parseFloat(m[1].replace(/,/g, '')) : 0
+  }
+
+  const quantity = num(/Quantity:\s*([\d,.]+)/)
+  const marketPrice = num(/Market Price:\s*\$([\d,.]+)/)
+  const currency = text.match(/Market Price:\s*\$[\d,.]+\s+(\w+)/)?.[1] ?? 'USD'
+  const avgCost = num(/Average Cost:\s*\$([\d,.]+)/)
+  const totalInvested = num(/Total Invested:\s*\$([\d,.]+)/)
+  const currentValue = num(/Current Value:\s*\$([\d,.]+)/)
+  const unrealizedPnl = num(/Unrealized P&L:\s*\$([-\d,.]+)/)
+  const pnlPctMatch = text.match(/Unrealized P&L:.*?\(([-+\d.]+)%\)/)
+  const unrealizedPnlPercent = pnlPctMatch ? parseFloat(pnlPctMatch[1]) : 0
+  const dividendsMatch = text.match(/Dividends:\s*\$([\d,.]+)/)
+  const dividends = dividendsMatch ? parseFloat(dividendsMatch[1].replace(/,/g, '')) : null
+  const firstBuy = text.match(/First Buy:\s*(\S+)/)?.[1] ?? ''
+  const transactionCount = num(/Transactions:\s*(\d+)/)
+
+  // Earnings
+  let earnings: HoldingDetailData['earnings'] = null
+  const earningsSection = text.match(/Upcoming Earnings:\n([\s\S]*?)(?=\n\n|\nAnalyst|\nNews|\nPrice Targets|\nSmart Summary|$)/)
+  if (earningsSection) {
+    const lines = earningsSection[1].trim().split('\n')
+    earnings = lines.map(line => {
+      const parts = line.trim().match(/(\S+)\s+EPS Est:\s*(\S+)\s+EPS Actual:\s*(\S+)/)
+      return parts ? { date: parts[1], epsEstimate: parts[2], epsActual: parts[3] } : null
+    }).filter((e): e is NonNullable<typeof e> => e !== null)
+  }
+
+  // Analyst
+  let analystCounts: HoldingDetailData['analystCounts'] = null
+  const analystMatch = text.match(/Analyst Consensus \(([^)]+)\):\n\s*Strong Buy:\s*(\d+)\s+Buy:\s*(\d+)\s+Hold:\s*(\d+)\s+Sell:\s*(\d+)\s+Strong Sell:\s*(\d+)/)
+  if (analystMatch) {
+    analystCounts = {
+      period: analystMatch[1],
+      strongBuy: parseInt(analystMatch[2]),
+      buy: parseInt(analystMatch[3]),
+      hold: parseInt(analystMatch[4]),
+      sell: parseInt(analystMatch[5]),
+      strongSell: parseInt(analystMatch[6]),
+    }
+  }
+
+  // News
+  let news: HoldingDetailData['news'] = null
+  const newsSection = text.match(/News Sentiment:\n([\s\S]*?)(?=\n\n|\nPrice Targets|\nSmart Summary|$)/)
+  if (newsSection) {
+    const lines = newsSection[1].trim().split('\n')
+    news = lines.map(line => {
+      const parts = line.trim().match(/\[([^\]]+)\]\s*(.+?)\s+\(([^)]+)\)/)
+      return parts ? { sentiment: parts[1], title: parts[2], source: parts[3] } : null
+    }).filter((e): e is NonNullable<typeof e> => e !== null)
+  }
+
+  // Price targets
+  let priceTargets: HoldingDetailData['priceTargets'] = null
+  const ptMatch = text.match(/Consensus:\s*\$([\d,.]+)\s+Median:\s*\$([\d,.]+)\s+High:\s*\$([\d,.]+)\s+Low:\s*\$([\d,.]+)/)
+  if (ptMatch) {
+    priceTargets = {
+      consensus: parseFloat(ptMatch[1].replace(/,/g, '')),
+      median: parseFloat(ptMatch[2].replace(/,/g, '')),
+      high: parseFloat(ptMatch[3].replace(/,/g, '')),
+      low: parseFloat(ptMatch[4].replace(/,/g, '')),
+    }
+  }
+
+  // Smart Summary signals
+  let impliedMove: HoldingDetailData['impliedMove'] = null
+  const upsideMatch = text.match(/Implied Upside:\s*\+([\d.]+)%\s*\(target \$([\d,.]+)\)/)
+  const downsideMatch = text.match(/Implied Downside:\s*([-\d.]+)%\s*\(target \$([\d,.]+)\)/)
+  if (upsideMatch) {
+    impliedMove = { direction: 'upside', percent: parseFloat(upsideMatch[1]), target: parseFloat(upsideMatch[2].replace(/,/g, '')) }
+  } else if (downsideMatch) {
+    impliedMove = { direction: 'downside', percent: parseFloat(downsideMatch[1]), target: parseFloat(downsideMatch[2].replace(/,/g, '')) }
+  }
+
+  let analystSignal: HoldingDetailData['analystSignal'] = null
+  const sigMatch = text.match(/Analyst Signal:\s*(\w[\w ]*?)\s*\((\d+) of (\d+) analysts bullish\)/)
+  if (sigMatch) {
+    analystSignal = { label: sigMatch[1], bullish: parseInt(sigMatch[2]), total: parseInt(sigMatch[3]) }
+  }
+
+  let sentiment: HoldingDetailData['sentiment'] = null
+  const sentMatch = text.match(/Sentiment:\s*(Bullish|Bearish|Neutral)\s*\((\d+) of (\d+) articles/)
+  if (sentMatch) {
+    sentiment = { label: sentMatch[1] as 'Bullish' | 'Bearish' | 'Neutral', count: parseInt(sentMatch[2]), total: parseInt(sentMatch[3]) }
+  } else {
+    const neutralMatch = text.match(/Sentiment:\s*Neutral\s*\((\d+) articles\)/)
+    if (neutralMatch) {
+      sentiment = { label: 'Neutral', count: 0, total: parseInt(neutralMatch[1]) }
+    }
+  }
+
+  let earningsAlert: HoldingDetailData['earningsAlert'] = null
+  const alertMatch = text.match(/Earnings Alert:\s*Reporting in (\d+) days\s*\((\S+)\)/)
+  if (alertMatch) {
+    earningsAlert = { daysUntil: parseInt(alertMatch[1]), date: alertMatch[2] }
+  }
+
+  return {
+    name, symbol, quantity, marketPrice, currency, avgCost, totalInvested, currentValue,
+    unrealizedPnl, unrealizedPnlPercent, dividends, firstBuy, transactionCount,
+    earnings, analystCounts, news, priceTargets,
+    impliedMove, analystSignal, sentiment, earningsAlert,
+  }
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
