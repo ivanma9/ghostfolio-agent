@@ -36,3 +36,13 @@ Every task MUST follow this sequence before the session ends. No exceptions.
 - **Alpha Vantage**: news sentiment, fed funds rate, CPI, treasury yield (free tier)
 - **FMP**: analyst estimates (annual), price target consensus, price target summary (free tier, `/stable` base URL)
 - Congressional trading data → separate standalone service (not in this repo)
+
+## Ghostfolio Client — Unused Endpoints to Add Per Feature
+
+Add new Ghostfolio client methods only when a feature task needs them. Do not add speculatively.
+
+- `get_dividends()` → `/api/v1/portfolio/dividends` (groupBy, date range)
+- `get_investments()` → `/api/v1/portfolio/investments` (investment timeline, groupBy)
+- `get_benchmarks()` → `/api/v1/benchmarks/{dataSource}/{symbol}/{startDate}` (compare to S&P 500 etc)
+- `get_market_data()` → `/api/v1/market-data/{dataSource}/{symbol}` (historical prices — test first, may be limited)
+- `get_market_overview()` → `/api/v1/market-data/markets` (market context, supports includeHistoricalData flag)
