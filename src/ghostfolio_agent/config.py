@@ -2,10 +2,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # LLM
-    anthropic_api_key: str
+    anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
 
     # Ghostfolio
     ghostfolio_base_url: str = "http://localhost:3333"

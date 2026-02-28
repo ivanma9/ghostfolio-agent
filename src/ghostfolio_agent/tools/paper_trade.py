@@ -44,16 +44,17 @@ def _parse_action(action: str):
     if action == "reset":
         return "reset", None, None, False
 
-    # buy/sell with dollar amount: "buy $300 AAPL" or "buy $300 of AAPL"
-    m = re.match(r"^(buy|sell)\s+\$(\d+(?:\.\d+)?)\s+(?:of\s+)?([a-z0-9.\-]+)$", action)
+    # buy/sell with dollar amount: "buy $300 AAPL" or "buy $300 of Micron Technology"
+    m = re.match(r"^(buy|sell)\s+\$(\d+(?:\.\d+)?)\s+(?:of\s+)?(.+)$", action)
     if m:
-        return m.group(1), float(m.group(2)), m.group(3).upper(), True
+        return m.group(1), float(m.group(2)), m.group(3).strip().upper(), True
 
-    # buy/sell patterns: "buy 10 AAPL" or "buy AAPL 10"
-    m = re.match(r"^(buy|sell)\s+(\d+(?:\.\d+)?)\s+([a-z0-9.\-]+)$", action)
+    # buy/sell patterns: "buy 10 AAPL" or "buy 10 Micron Technology"
+    m = re.match(r"^(buy|sell)\s+(\d+(?:\.\d+)?)\s+(.+)$", action)
     if m:
-        return m.group(1), float(m.group(2)), m.group(3).upper(), False
+        return m.group(1), float(m.group(2)), m.group(3).strip().upper(), False
 
+    # buy/sell patterns: "buy AAPL 10"
     m = re.match(r"^(buy|sell)\s+([a-z0-9.\-]+)\s+(\d+(?:\.\d+)?)$", action)
     if m:
         return m.group(1), float(m.group(3)), m.group(2).upper(), False
@@ -64,7 +65,7 @@ def _parse_action(action: str):
 def create_paper_trade_tool(client: GhostfolioClient):
     @tool
     async def paper_trade(action: str) -> str:
-        """Execute paper trades or view paper portfolio. Actions: 'buy 10 AAPL', 'buy $300 AAPL', 'sell 5 NVDA', 'show portfolio', 'reset'. Supports share counts or dollar amounts. Starts with $100,000 virtual cash. Use this when the user wants to practice trading, simulate trades, or manage their paper portfolio."""
+        """Execute paper trades or view paper portfolio. Actions: 'buy 10 AAPL', 'buy $300 AAPL', 'buy $300 of Micron', 'sell 5 NVDA', 'show portfolio', 'reset'. Accepts tickers or company names, share counts or dollar amounts. Resolves symbols and fetches prices automatically. Starts with $100,000 virtual cash."""
         command, quantity, symbol, is_dollar_amount = _parse_action(action)
 
         if command is None:
@@ -143,8 +144,19 @@ def create_paper_trade_tool(client: GhostfolioClient):
         if not items:
             return f"Symbol '{symbol}' not found. Please check the ticker."
 
-        data_source = items[0].get("dataSource", "YAHOO")
-        resolved_symbol = items[0].get("symbol", symbol)
+        # Prefer USD-denominated equities from YAHOO (US-listed stocks)
+        best = items[0]
+        for item in items:
+            if (
+                item.get("currency") == "USD"
+                and item.get("assetSubClass") == "STOCK"
+                and item.get("dataSource") == "YAHOO"
+            ):
+                best = item
+                break
+
+        data_source = best.get("dataSource", "YAHOO")
+        resolved_symbol = best.get("symbol", symbol)
 
         try:
             sym_data = await client.get_symbol(data_source, resolved_symbol)

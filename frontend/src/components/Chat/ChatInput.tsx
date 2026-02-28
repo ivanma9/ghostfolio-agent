@@ -1,11 +1,12 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 
 interface ChatInputProps {
   onSend: (text: string) => void
   disabled?: boolean
+  leftSlot?: ReactNode
 }
 
-export default function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+export default function ChatInput({ onSend, disabled = false, leftSlot }: ChatInputProps) {
   const [value, setValue] = useState('')
 
   const handleSend = () => {
@@ -25,6 +26,7 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
   return (
     <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
       <div className="max-w-3xl mx-auto flex items-center gap-3">
+        {leftSlot}
         <input
           type="text"
           value={value}
