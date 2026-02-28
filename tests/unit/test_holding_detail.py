@@ -370,3 +370,28 @@ class TestSmartSummary:
         assert "Analyst Signal" not in result
         # No Finnhub earnings → no earnings alert
         assert "Earnings Alert" not in result
+
+    @pytest.mark.asyncio
+    async def test_conviction_score_in_smart_summary(
+        self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client
+    ):
+        """Full enrichment → Smart Summary includes Conviction Score line."""
+        tool = create_holding_detail_tool(
+            ghostfolio_client,
+            finnhub=finnhub_client,
+            alpha_vantage=alpha_vantage_client,
+            fmp=fmp_client,
+        )
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Smart Summary" in result
+        assert "Conviction Score:" in result
+        assert "/100" in result
+
+    @pytest.mark.asyncio
+    async def test_conviction_score_absent_without_enrichment(self, ghostfolio_client):
+        """No 3rd party clients → no Conviction Score line."""
+        tool = create_holding_detail_tool(ghostfolio_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Conviction Score:" not in result
