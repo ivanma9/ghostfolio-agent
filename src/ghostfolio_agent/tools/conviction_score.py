@@ -116,3 +116,50 @@ def compute_earnings_score(
             continue
 
     return 75, "No upcoming earnings (stable)"
+
+
+def score_to_label(score: int) -> str:
+    """Map 0-100 score to conviction label."""
+    if score <= 20:
+        return "Strong Sell"
+    elif score <= 40:
+        return "Sell"
+    elif score <= 60:
+        return "Neutral"
+    elif score <= 80:
+        return "Buy"
+    else:
+        return "Strong Buy"
+
+
+def compute_composite(
+    components: list[tuple[str, int, str, int]],
+) -> tuple[int | None, str, list[dict]]:
+    """Compute weighted composite from (name, score, explanation, weight) tuples.
+
+    Redistributes weights proportionally if some components are missing.
+    Returns (composite_score, label, detail_list).
+    """
+    if not components:
+        return None, "Insufficient Data", []
+
+    total_weight = sum(w for _, _, _, w in components)
+    if total_weight == 0:
+        return None, "Insufficient Data", []
+
+    weighted_sum = sum(score * weight for _, score, _, weight in components)
+    composite = round(weighted_sum / total_weight)
+    composite = max(0, min(100, composite))
+    label = score_to_label(composite)
+
+    details = []
+    for name, score, explanation, weight in components:
+        redistributed_pct = round(weight / total_weight * 100)
+        details.append({
+            "name": name,
+            "score": score,
+            "explanation": explanation,
+            "weight": redistributed_pct,
+        })
+
+    return composite, label, details

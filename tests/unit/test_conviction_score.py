@@ -174,3 +174,73 @@ class TestEarningsScore:
         """Empty list → 75 (stable)."""
         score, explanation = compute_earnings_score([])
         assert score == 75
+
+
+from ghostfolio_agent.tools.conviction_score import compute_composite, score_to_label
+
+
+class TestComposite:
+    def test_all_components(self):
+        """All 4 components present — weighted average."""
+        components = [
+            ("analyst", 80, "18 of 24 bullish", 40),
+            ("price_target", 70, "+12% upside", 30),
+            ("sentiment", 60, "3 of 5 positive", 20),
+            ("earnings", 50, "Reporting in 8 days", 10),
+        ]
+        score, label, details = compute_composite(components)
+        # (80*40 + 70*30 + 60*20 + 50*10) / 100 = (3200+2100+1200+500)/100 = 70
+        assert score == 70
+        assert label == "Buy"
+        assert len(details) == 4
+
+    def test_missing_one_component(self):
+        """3 components — weights redistribute."""
+        components = [
+            ("analyst", 80, "18 of 24 bullish", 40),
+            ("price_target", 70, "+12% upside", 30),
+            ("earnings", 50, "Reporting in 8 days", 10),
+        ]
+        score, label, details = compute_composite(components)
+        # Total weight = 80, redistributed: analyst=40/80*100=50, pt=30/80*100=37.5, earn=10/80*100=12.5
+        # (80*50 + 70*37.5 + 50*12.5) / 100 = (4000+2625+625)/100 = 72.5 → 72 or 73
+        assert 72 <= score <= 73
+        assert label == "Buy"
+
+    def test_single_component(self):
+        """Only one component — uses its score directly."""
+        components = [
+            ("analyst", 85, "20 of 24 bullish", 40),
+        ]
+        score, label, details = compute_composite(components)
+        assert score == 85
+        assert label == "Strong Buy"
+
+    def test_empty_components(self):
+        """No components → None."""
+        score, label, details = compute_composite([])
+        assert score is None
+        assert label == "Insufficient Data"
+
+
+class TestScoreToLabel:
+    def test_strong_sell(self):
+        assert score_to_label(10) == "Strong Sell"
+        assert score_to_label(0) == "Strong Sell"
+        assert score_to_label(20) == "Strong Sell"
+
+    def test_sell(self):
+        assert score_to_label(21) == "Sell"
+        assert score_to_label(40) == "Sell"
+
+    def test_neutral(self):
+        assert score_to_label(41) == "Neutral"
+        assert score_to_label(60) == "Neutral"
+
+    def test_buy(self):
+        assert score_to_label(61) == "Buy"
+        assert score_to_label(80) == "Buy"
+
+    def test_strong_buy(self):
+        assert score_to_label(81) == "Strong Buy"
+        assert score_to_label(100) == "Strong Buy"
