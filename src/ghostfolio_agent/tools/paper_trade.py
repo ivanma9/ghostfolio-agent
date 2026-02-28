@@ -11,7 +11,7 @@ _DATA_FILE = "data/paper_portfolio.json"
 _STARTING_CASH = 100_000.0
 
 
-def _load_portfolio() -> dict:
+def load_portfolio() -> dict:
     os.makedirs("data", exist_ok=True)
     if not pathlib.Path(_DATA_FILE).exists():
         return _default_portfolio()
@@ -81,7 +81,7 @@ def create_paper_trade_tool(client: GhostfolioClient):
 
         # ── SHOW ───────────────────────────────────────────────────────────────
         if command == "show":
-            portfolio = _load_portfolio()
+            portfolio = load_portfolio()
             cash = portfolio.get("cash", _STARTING_CASH)
             positions = portfolio.get("positions", {})
 
@@ -180,7 +180,7 @@ def create_paper_trade_tool(client: GhostfolioClient):
                     f"{resolved_symbol} at ${price:,.2f}."
                 )
 
-        portfolio = _load_portfolio()
+        portfolio = load_portfolio()
         cash = portfolio["cash"]
         positions = portfolio.setdefault("positions", {})
         trades = portfolio.setdefault("trades", [])

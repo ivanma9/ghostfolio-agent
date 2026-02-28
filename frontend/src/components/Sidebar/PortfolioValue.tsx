@@ -2,6 +2,7 @@ interface PortfolioValueProps {
   value: number;
   dailyChange: { value: number; percent: number };
   isLoading: boolean;
+  isPaperTrading?: boolean;
 }
 
 function formatCurrency(value: number): string {
@@ -13,12 +14,12 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function PortfolioValue({ value, dailyChange, isLoading }: PortfolioValueProps) {
+export function PortfolioValue({ value, dailyChange, isLoading, isPaperTrading = false }: PortfolioValueProps) {
   const isPositive = dailyChange.value >= 0;
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-white p-5 animate-pulse">
+      <div className={`rounded-2xl bg-gradient-to-br p-5 animate-pulse ${isPaperTrading ? 'from-amber-50 to-white' : 'from-indigo-50 to-white'}`}>
         <div className="h-3 w-24 bg-gray-200 rounded mb-3" />
         <div className="h-8 w-40 bg-gray-200 rounded mb-3" />
         <div className="h-4 w-32 bg-gray-200 rounded" />
@@ -28,12 +29,12 @@ export function PortfolioValue({ value, dailyChange, isLoading }: PortfolioValue
 
   const changeSign = isPositive ? '+' : '';
   const changeColor = isPositive ? 'text-emerald-500' : 'text-red-500';
-  const arrow = isPositive ? '▲' : '▼';
+  const arrow = isPositive ? '\u25B2' : '\u25BC';
 
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
+    <div className={`rounded-2xl bg-gradient-to-br p-5 shadow-sm ${isPaperTrading ? 'from-amber-50 to-white' : 'from-indigo-50 to-white'}`}>
       <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
-        Portfolio Value
+        {isPaperTrading ? 'Paper Portfolio Value' : 'Portfolio Value'}
       </p>
       <p className="text-3xl font-bold text-gray-900 tracking-tight">
         {formatCurrency(value)}
@@ -44,7 +45,7 @@ export function PortfolioValue({ value, dailyChange, isLoading }: PortfolioValue
           {changeSign}{formatCurrency(dailyChange.value)} ({changeSign}{dailyChange.percent.toFixed(2)}%)
         </span>
       </p>
-      <p className="text-xs text-gray-400 mt-0.5">Today</p>
+      <p className="text-xs text-gray-400 mt-0.5">{isPaperTrading ? 'Total P&L' : 'Today'}</p>
     </div>
   );
 }

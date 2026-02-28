@@ -45,3 +45,22 @@ class ChatResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+
+
+class PaperPositionResponse(BaseModel):
+    symbol: str
+    quantity: float
+    avg_cost: float
+    current_price: float
+    value: float
+    pnl: float
+    pnl_percent: float
+    allocation: float
+
+
+class PaperPortfolioResponse(BaseModel):
+    cash: float
+    total_value: float
+    total_pnl: float
+    total_pnl_percent: float
+    positions: list[PaperPositionResponse] = Field(default_factory=list)

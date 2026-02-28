@@ -8,6 +8,7 @@ interface SidebarProps {
   portfolioValue: number;
   dailyChange: { value: number; percent: number };
   isLoading: boolean;
+  isPaperTrading?: boolean;
 }
 
 function ChartIcon() {
@@ -28,21 +29,28 @@ function ChartIcon() {
   );
 }
 
-export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading }: SidebarProps) {
+export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false }: SidebarProps) {
   return (
     <aside className="w-72 h-full border-r border-gray-100 bg-white overflow-y-auto flex-shrink-0">
       <div className="p-5 space-y-6">
         {/* Logo / Title */}
         <div className="flex items-center gap-2.5 py-1">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm bg-gradient-to-br ${isPaperTrading ? 'from-amber-400 to-orange-500' : 'from-indigo-500 to-violet-600'}`}>
             <ChartIcon />
           </div>
           <div>
             <h1 className="text-base font-bold text-gray-900 leading-none tracking-tight">
               AgentForge
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">AI Portfolio Assistant</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {isPaperTrading ? 'Paper Portfolio' : 'AI Portfolio Assistant'}
+            </p>
           </div>
+          {isPaperTrading && (
+            <span className="ml-auto px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+              Paper Mode
+            </span>
+          )}
         </div>
 
         {/* Portfolio Value */}
@@ -51,6 +59,7 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading }: Si
             value={portfolioValue}
             dailyChange={dailyChange}
             isLoading={isLoading}
+            isPaperTrading={isPaperTrading}
           />
         </section>
 

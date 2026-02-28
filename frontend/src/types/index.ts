@@ -96,6 +96,7 @@ export interface PaperPosition {
   value: number
   pnl: number
   pnlPercent: number
+  allocation: number
 }
 
 export interface PaperPortfolio {

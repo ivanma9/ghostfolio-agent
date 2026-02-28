@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { postChat } from '../api/chat'
+import { postChat, fetchPaperPortfolio } from '../api/chat'
 import type { Holding } from '../types'
 
 interface DailyChange {
@@ -82,7 +82,7 @@ function parseDailyChange(text: string): DailyChange {
   return { value: 0, percent: 0 }
 }
 
-export function useSidebar(): UseSidebarReturn {
+export function useSidebar(isPaperTrading: boolean = false): UseSidebarReturn {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [portfolioValue, setPortfolioValue] = useState(0)
   const [dailyChange, setDailyChange] = useState<DailyChange>({ value: 0, percent: 0 })
@@ -91,20 +91,38 @@ export function useSidebar(): UseSidebarReturn {
   const refresh = useCallback(async () => {
     setIsLoading(true)
     try {
-      const data = await postChat({
-        message: 'Give me my portfolio summary',
-        session_id: SIDEBAR_SESSION_ID,
-      })
+      if (isPaperTrading) {
+        // Paper mode: use structured API endpoint (no LLM call)
+        const paper = await fetchPaperPortfolio()
+        const mappedHoldings: Holding[] = paper.positions.map(p => ({
+          symbol: p.symbol,
+          name: p.symbol, // paper portfolio doesn't have company names
+          quantity: p.quantity,
+          price: p.currentPrice,
+          value: p.value,
+          allocation: p.allocation,
+          currency: 'USD',
+        }))
+        setHoldings(mappedHoldings)
+        setPortfolioValue(paper.totalValue)
+        setDailyChange({ value: paper.totalPnl, percent: paper.totalPnlPercent })
+      } else {
+        // Real mode: existing LLM-based portfolio summary
+        const data = await postChat({
+          message: 'Give me my portfolio summary',
+          session_id: SIDEBAR_SESSION_ID,
+        })
 
-      const text = data.response
+        const text = data.response
 
-      const parsedHoldings = parseHoldingsFromText(text)
-      const parsedValue = parsePortfolioValue(text)
-      const parsedDailyChange = parseDailyChange(text)
+        const parsedHoldings = parseHoldingsFromText(text)
+        const parsedValue = parsePortfolioValue(text)
+        const parsedDailyChange = parseDailyChange(text)
 
-      setHoldings(parsedHoldings)
-      setPortfolioValue(parsedValue)
-      setDailyChange(parsedDailyChange)
+        setHoldings(parsedHoldings)
+        setPortfolioValue(parsedValue)
+        setDailyChange(parsedDailyChange)
+      }
     } catch (error) {
       console.error('Sidebar refresh error:', error)
       setHoldings([])
@@ -113,7 +131,7 @@ export function useSidebar(): UseSidebarReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [isPaperTrading])
 
   useEffect(() => {
     refresh()

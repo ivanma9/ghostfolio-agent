@@ -206,6 +206,7 @@ export function parsePaperPortfolio(text: string): PaperPortfolio | null {
     value: number
     pnl: number
     pnlPercent: number
+    allocation: number
   }> = []
   const posRe = /[-•]\s+([A-Z]{1,5}):\s*([\d.]+)\s+shares?,\s+avg\s+cost\s+\$?([\d,]+(?:\.\d{2})?),\s+current\s+\$?([\d,]+(?:\.\d{2})?),\s+value\s+\$?([\d,]+(?:\.\d{2})?),\s+P&L:\s+([+-]?\$?[\d,]+(?:\.\d{2})?)\s+\(([+-]?[\d.]+)%\)/gi
   let m: RegExpExecArray | null
@@ -218,6 +219,7 @@ export function parsePaperPortfolio(text: string): PaperPortfolio | null {
       value: parseFloat(m[5].replace(/,/g, '')),
       pnl: parseFloat(m[6].replace(/[$,]/g, '')),
       pnlPercent: parseFloat(m[7]),
+      allocation: 0,
     })
   }
 

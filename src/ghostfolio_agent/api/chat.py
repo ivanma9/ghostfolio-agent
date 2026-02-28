@@ -3,10 +3,12 @@ import asyncio
 import structlog
 from fastapi import APIRouter
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.types import interrupt, GraphInterrupt
+from langgraph.types import interrupt
+from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse
+from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse
+from ghostfolio_agent.tools.paper_trade import load_portfolio, _STARTING_CASH
 
 logger = structlog.get_logger()
 from ghostfolio_agent.agent.graph import create_agent, AVAILABLE_MODELS, DEFAULT_MODEL
@@ -85,6 +87,72 @@ def _extract_citations(messages: list) -> list[Citation]:
 async def list_models():
     """Return available models for the frontend selector."""
     return {"models": AVAILABLE_MODELS, "default": DEFAULT_MODEL}
+
+
+@router.get("/api/paper-portfolio", response_model=PaperPortfolioResponse)
+async def get_paper_portfolio():
+    """Return paper portfolio with live prices — no LLM call needed."""
+    portfolio = load_portfolio()
+    cash = portfolio.get("cash", _STARTING_CASH)
+    positions_raw = portfolio.get("positions", {})
+
+    client = _get_client()
+    positions: list[PaperPositionResponse] = []
+    total_position_value = 0.0
+
+    if positions_raw:
+        # Fetch live prices in parallel
+        async def _price(sym: str, pos: dict) -> PaperPositionResponse:
+            avg_cost = pos.get("avg_cost", 0)
+            qty = pos.get("quantity", 0)
+            current_price = avg_cost  # fallback
+            try:
+                lookup = await client.lookup_symbol(sym)
+                items = lookup.get("items", [])
+                if items:
+                    ds = items[0].get("dataSource", "YAHOO")
+                    sym_data = await client.get_symbol(ds, sym)
+                    current_price = sym_data.get("marketPrice", avg_cost) or avg_cost
+            except Exception:
+                pass
+            value = qty * current_price
+            cost = qty * avg_cost
+            pnl = value - cost
+            pnl_pct = (pnl / cost * 100) if cost else 0
+            return PaperPositionResponse(
+                symbol=sym,
+                quantity=qty,
+                avg_cost=avg_cost,
+                current_price=current_price,
+                value=value,
+                pnl=pnl,
+                pnl_percent=pnl_pct,
+                allocation=0,  # filled below
+            )
+
+        results = await asyncio.gather(
+            *[_price(sym, pos) for sym, pos in positions_raw.items()]
+        )
+        positions = list(results)
+        total_position_value = sum(p.value for p in positions)
+
+        # Compute allocations
+        total_value = cash + total_position_value
+        if total_value > 0:
+            for p in positions:
+                p.allocation = round(p.value / total_value * 100, 1)
+
+    total_value = cash + total_position_value
+    total_pnl = total_value - _STARTING_CASH
+    total_pnl_pct = (total_pnl / _STARTING_CASH * 100)
+
+    return PaperPortfolioResponse(
+        cash=cash,
+        total_value=total_value,
+        total_pnl=total_pnl,
+        total_pnl_percent=total_pnl_pct,
+        positions=positions,
+    )
 
 
 @router.post("/api/chat", response_model=ChatResponse)
