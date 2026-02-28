@@ -42,6 +42,15 @@ function stripRawData(content: string, toolCalls: string[]): string {
       if (/^Data Points:/.test(trimmed)) return false
     }
 
+    // Strip raw holding detail data lines when RichCard renders them
+    if (toolCalls.includes('holding_detail')) {
+      if (/^\s*(Quantity|Market Price|Average Cost|Total Invested|Current Value|Unrealized P&L|Dividends|First Buy|Transactions):/i.test(trimmed)) return false
+      if (/^\s*(Strong Buy:|Consensus:|Last Month:|Last Quarter:)/i.test(trimmed)) return false
+      if (/^\s*\[(Bullish|Bearish|Neutral|Somewhat)/i.test(trimmed)) return false
+      if (/^\s*\d{4}-\d{2}-\d{2}\s+EPS/i.test(trimmed)) return false
+      if (/^\s*(Implied Upside|Implied Downside|Analyst Signal|Sentiment:|Earnings Alert):/i.test(trimmed)) return false
+    }
+
     // Strip position/trade data lines from paper_trade
     if (toolCalls.includes('paper_trade')) {
       if ((trimmed.match(/\|/g) || []).length >= 3) return false
