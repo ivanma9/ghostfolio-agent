@@ -1,29 +1,34 @@
-import httpx
 from typing import Any, cast
 
+from ghostfolio_agent.clients.base import BaseClient
+from ghostfolio_agent.clients.exceptions import APIError
 
-class FMPClient:
+
+class FMPClient(BaseClient):
     """Async HTTP client for Financial Modeling Prep API (analyst estimates, price targets)."""
 
-    BASE_URL = "https://financialmodelingprep.com/stable"
+    client_name = "fmp"
 
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
+        super().__init__(base_url="https://financialmodelingprep.com/stable", default_headers={})
+
+    def _check_soft_errors(self, response_json: Any) -> None:
+        """Detect error messages returned in 200 responses."""
+        if isinstance(response_json, dict) and "Error Message" in response_json:
+            raise APIError(
+                self.client_name,
+                200,
+                "",
+                response_json["Error Message"],
+            )
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """Make authenticated GET request to FMP."""
-        url = f"{self.BASE_URL}{path}"
-        request_params: dict[str, Any] = {"apikey": self._api_key}
+        """Make authenticated GET request to FMP, injecting apikey param."""
+        merged: dict[str, Any] = {"apikey": self._api_key}
         if params:
-            request_params.update(params)
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=request_params)
-        if not response.is_success:
-            raise RuntimeError(
-                f"FMP API error: {response.status_code} {response.reason_phrase} "
-                f"for {response.url} — {response.text[:500]}"
-            )
-        return response.json()
+            merged.update(params)
+        return await self._request("GET", f"{self._base_url}{path}", params=merged)
 
     async def get_analyst_estimates(self, symbol: str) -> list[dict[str, Any]]:
         """Get analyst estimates (revenue, EPS forecasts) for a symbol. Annual period."""

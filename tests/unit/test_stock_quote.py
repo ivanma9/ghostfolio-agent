@@ -4,6 +4,7 @@ import httpx
 from unittest.mock import AsyncMock, patch
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.clients.exceptions import TransientError
 from ghostfolio_agent.tools.stock_quote import create_stock_quote_tool
 
 
@@ -56,7 +57,7 @@ class TestFinnhubGetQuote:
             "https://finnhub.io/api/v1/quote",
             params={"symbol": "AAPL", "token": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(RuntimeError, match="Finnhub API error"):
+        with pytest.raises(TransientError):
             await finnhub.get_quote("AAPL")
 
 

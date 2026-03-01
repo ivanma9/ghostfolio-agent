@@ -1,40 +1,23 @@
-import httpx
 from typing import Any
 
+from ghostfolio_agent.clients.base import BaseClient
 
-class GhostfolioClient:
+
+class GhostfolioClient(BaseClient):
     """Async HTTP client for Ghostfolio REST API."""
 
+    client_name = "ghostfolio"
+    retryable = True
+    max_retries = 2
+
     def __init__(self, base_url: str, access_token: str) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        }
-
-    async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """Make authenticated GET request."""
-        url = f"{self._base_url}{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, headers=self._headers, params=params)
-        if not response.is_success:
-            raise RuntimeError(
-                f"Ghostfolio API error: {response.status_code} {response.reason_phrase} "
-                f"for {response.url} — {response.text[:500]}"
-            )
-        return response.json()
-
-    async def _post(self, path: str, json_data: dict) -> Any:
-        """Make authenticated POST request."""
-        url = f"{self._base_url}{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=self._headers, json=json_data)
-        if not response.is_success:
-            raise RuntimeError(
-                f"Ghostfolio API error: {response.status_code} {response.reason_phrase} "
-                f"for {response.url} — {response.text[:500]}"
-            )
-        return response.json()
+        super().__init__(
+            base_url=base_url,
+            default_headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
+        )
 
     async def get_portfolio_holdings(self) -> dict[str, Any]:
         """Get portfolio holdings with values and allocations."""
@@ -72,4 +55,4 @@ class GhostfolioClient:
 
     async def create_order(self, order_data: dict) -> dict[str, Any]:
         """Create a new order/activity."""
-        return await self._post("/api/v1/order", order_data)
+        return await self._post("/api/v1/order", json_data=order_data)

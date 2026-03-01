@@ -2,6 +2,7 @@ import pytest
 import respx
 import httpx
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.exceptions import APIError, TransientError, AuthenticationError
 
 
 @pytest.fixture
@@ -46,7 +47,7 @@ class TestAnalystEstimates:
             "https://financialmodelingprep.com/stable/analyst-estimates",
             params={"symbol": "TSLA", "period": "annual", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(RuntimeError, match="FMP API error"):
+        with pytest.raises(TransientError):
             await client.get_analyst_estimates("TSLA")
 
 
@@ -84,7 +85,7 @@ class TestPriceTargetConsensus:
             "https://financialmodelingprep.com/stable/price-target-consensus",
             params={"symbol": "AAPL", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(403, text="Forbidden"))
-        with pytest.raises(RuntimeError, match="FMP API error"):
+        with pytest.raises(AuthenticationError):
             await client.get_price_target_consensus("AAPL")
 
 
@@ -124,5 +125,5 @@ class TestPriceTargetSummary:
             "https://financialmodelingprep.com/stable/price-target-summary",
             params={"symbol": "TSLA", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(RuntimeError, match="FMP API error"):
+        with pytest.raises(TransientError):
             await client.get_price_target_summary("TSLA")

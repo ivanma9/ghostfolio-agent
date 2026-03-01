@@ -2,6 +2,7 @@ import pytest
 import respx
 import httpx
 from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.clients.exceptions import APIError, TransientError
 
 
 @pytest.fixture
@@ -72,5 +73,5 @@ class TestEarningsCalendar:
             "https://finnhub.io/api/v1/calendar/earnings",
             params={"symbol": "TSLA", "token": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(RuntimeError, match="Finnhub API error"):
+        with pytest.raises(TransientError):
             await client.get_earnings_calendar("TSLA")

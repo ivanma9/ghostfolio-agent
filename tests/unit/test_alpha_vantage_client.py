@@ -2,6 +2,7 @@ import pytest
 import respx
 import httpx
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
+from ghostfolio_agent.clients.exceptions import APIError, TransientError, AuthenticationError
 
 
 @pytest.fixture
@@ -53,7 +54,7 @@ class TestNewsSentiment:
             "https://www.alphavantage.co/query",
             params={"function": "NEWS_SENTIMENT", "tickers": "AAPL", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(RuntimeError, match="Alpha Vantage API error"):
+        with pytest.raises(TransientError):
             await client.get_news_sentiment("AAPL")
 
 
@@ -105,5 +106,5 @@ class TestMacroIndicators:
             "https://www.alphavantage.co/query",
             params={"function": "FEDERAL_FUNDS_RATE", "interval": "daily", "apikey": "test-key"},
         ).mock(return_value=httpx.Response(403, text="Forbidden"))
-        with pytest.raises(RuntimeError, match="Alpha Vantage API error"):
+        with pytest.raises(AuthenticationError):
             await client.get_fed_funds_rate()
