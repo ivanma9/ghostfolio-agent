@@ -19,24 +19,24 @@ class TestCooldown:
     def setup_method(self):
         self.engine = AlertEngine()
 
-    def test_new_alert_is_not_cooled_down(self):
-        """Fresh engine — any key passes cooldown."""
-        assert self.engine._is_cooled_down("AAPL:earnings") is False
+    def test_new_alert_is_cooled_down(self):
+        """Fresh engine — never-fired key is ready to fire."""
+        assert self.engine._is_cooled_down("AAPL:earnings") is True
 
-    def test_fired_alert_is_cooled_down(self):
+    def test_fired_alert_is_not_cooled_down(self):
         """After _record(), same key is suppressed within TTL."""
         self.engine._record("AAPL:earnings")
-        assert self.engine._is_cooled_down("AAPL:earnings") is True
+        assert self.engine._is_cooled_down("AAPL:earnings") is False
 
     def test_different_alert_key_not_affected(self):
         """Recording one key does not affect an independent key."""
         self.engine._record("AAPL:earnings")
-        assert self.engine._is_cooled_down("MSFT:big_mover") is False
+        assert self.engine._is_cooled_down("MSFT:big_mover") is True
 
     def test_expired_alert_passes_cooldown(self):
-        """An entry older than COOLDOWN_TTL is treated as cooled-down (fires again)."""
+        """An entry older than COOLDOWN_TTL is ready to fire again."""
         self.engine._fired["AAPL:earnings"] = time.time() - COOLDOWN_TTL - 1
-        assert self.engine._is_cooled_down("AAPL:earnings") is False
+        assert self.engine._is_cooled_down("AAPL:earnings") is True
 
     def test_record_prunes_old_entries(self):
         """_record() removes entries older than COOLDOWN_TTL from _fired."""

@@ -30,11 +30,11 @@ class AlertEngine:
     # ------------------------------------------------------------------
 
     def _is_cooled_down(self, key: str) -> bool:
-        """Return True if the alert key is within its cooldown window (suppress it)."""
+        """Return True if the alert key has passed its cooldown period (ready to fire)."""
         fired_at = self._fired.get(key)
         if fired_at is None:
-            return False
-        return (time.time() - fired_at) < COOLDOWN_TTL
+            return True
+        return (time.time() - fired_at) > COOLDOWN_TTL
 
     def _record(self, key: str) -> None:
         """Mark an alert key as fired now, and prune expired entries."""
