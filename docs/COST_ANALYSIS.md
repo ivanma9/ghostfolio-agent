@@ -55,6 +55,14 @@ Prices sourced from OpenAI and OpenRouter published pricing pages as of Feb 2026
 | Demo & debugging sessions | ~200 [ASSUMED] | ~3,000 [ASSUMED] | ~1,200 [ASSUMED] | $0.24 |
 | **Total estimated development spend** | **~1,260** | | | **~$4.22** |
 
+#### Adversarial Spec Sessions [ESTIMATED]
+
+| Session | Opponent Models | Rounds | External Model Cost | Claude Code Session Cost | Total Est. Cost |
+|---|---|---|---|---|---|
+| Congressional Trading Datastore (2026-03-01) | claude-opus-4-20250514, gpt-4o | 5 | ~$2.00 | ~$5–10 | ~$7–12 |
+
+> External model costs are for opponent model API calls via litellm (input+output tokens across all debate rounds). Claude Code session cost covers the full brainstorming + research + debate orchestration session on Opus 4.6. [ESTIMATED]
+
 > Multi-model eval comparisons use more expensive models (Claude Sonnet at $3/$15, GPT-4o at $2.50/$10), averaging ~$0.02/query across the mix. [ESTIMATED]
 
 > Unit tests use `respx` mocks and never call LLM APIs — confirmed by reading test source code. [MEASURED]
