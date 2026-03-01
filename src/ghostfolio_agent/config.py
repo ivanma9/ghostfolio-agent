@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # App
     agent_port: int = 8000
     log_level: str = "debug"
+    log_format: str = "json"
     domain: str = ""  # Production domain, e.g. "https://ghostfolio-agent.example.com"
 
     # Agent memory
