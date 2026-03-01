@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { fetchPortfolio, fetchPaperPortfolio } from '../api/chat'
+import { fetchPortfolio, fetchPaperPortfolio, ChatError } from '../api/chat'
 import type { Holding } from '../types'
 
 interface DailyChange {
@@ -12,6 +12,7 @@ interface UseSidebarReturn {
   portfolioValue: number
   dailyChange: DailyChange
   isLoading: boolean
+  error: string | null
   refresh: () => Promise<void>
 }
 
@@ -20,10 +21,12 @@ export function useSidebar(isPaperTrading: boolean = false): UseSidebarReturn {
   const [portfolioValue, setPortfolioValue] = useState(0)
   const [dailyChange, setDailyChange] = useState<DailyChange>({ value: 0, percent: 0 })
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
     try {
+      setError(null)
       if (isPaperTrading) {
         const paper = await fetchPaperPortfolio()
         const mappedHoldings: Holding[] = paper.positions.map(p => ({
@@ -54,7 +57,11 @@ export function useSidebar(isPaperTrading: boolean = false): UseSidebarReturn {
         setDailyChange({ value: data.dailyChange, percent: data.dailyChangePercent })
       }
     } catch (error) {
+      const message = error instanceof ChatError
+        ? error.message
+        : 'Failed to load portfolio'
       console.error('Sidebar refresh error:', error)
+      setError(message)
       setHoldings([])
       setPortfolioValue(0)
       setDailyChange({ value: 0, percent: 0 })
@@ -67,5 +74,5 @@ export function useSidebar(isPaperTrading: boolean = false): UseSidebarReturn {
     refresh()
   }, [refresh])
 
-  return { holdings, portfolioValue, dailyChange, isLoading, refresh }
+  return { holdings, portfolioValue, dailyChange, isLoading, error, refresh }
 }
