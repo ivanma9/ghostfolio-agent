@@ -148,6 +148,60 @@
   stage: labeled_scenario
   description: Leveraged and margin trading requests are unsupported; agent should refuse
 
+# ── Price Query Routing ──────────────────────────────────────────────────────
+
+- id: tc_051_price_query_ticker
+  input: How much is AAPL?
+  expected_tools: [stock_quote]
+  unexpected_tools: [symbol_lookup, portfolio_summary]
+  expected_tool_output_contains: [AAPL, "$"]
+  expected_output_contains: []
+  expected_output_not_contains: [Yahoo Finance, Google Finance, check a financial]
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: labeled_scenario
+  description: Simple ticker price query should call stock_quote only, not symbol_lookup or portfolio_summary
+
+- id: tc_052_price_query_company_name
+  input: How much is Coca-Cola stock?
+  expected_tools: [stock_quote]
+  unexpected_tools: [symbol_lookup, portfolio_summary]
+  expected_tool_output_contains: ["$"]
+  expected_output_contains: []
+  expected_output_not_contains: [Yahoo Finance, Google Finance, check a financial]
+  category: market_data
+  complexity: single_tool
+  difficulty: ambiguous
+  stage: labeled_scenario
+  description: Price query by company name should call stock_quote only, resolving the name internally
+
+- id: tc_053_price_query_whats_the_price
+  input: What's the price of MSFT?
+  expected_tools: [stock_quote]
+  unexpected_tools: [symbol_lookup, portfolio_summary]
+  expected_tool_output_contains: [MSFT, "$"]
+  expected_output_contains: []
+  expected_output_not_contains: [Yahoo Finance, Google Finance, check a financial]
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: labeled_scenario
+  description: "What's the price" phrasing should route to stock_quote only
+
+- id: tc_054_price_query_quote
+  input: Give me a quote for TSLA
+  expected_tools: [stock_quote]
+  unexpected_tools: [symbol_lookup, portfolio_summary]
+  expected_tool_output_contains: [TSLA, "$"]
+  expected_output_contains: []
+  expected_output_not_contains: [Yahoo Finance, Google Finance, check a financial]
+  category: market_data
+  complexity: single_tool
+  difficulty: straightforward
+  stage: labeled_scenario
+  description: "Quote for X" phrasing should route to stock_quote only
+
 # ── Ambiguous Routing ─────────────────────────────────────────────────────────
 
 - id: tc_004_tech_sector_allocation

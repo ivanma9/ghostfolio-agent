@@ -11,9 +11,10 @@ Usage:
 
 Each test case is sent to the agent's /api/chat endpoint. The runner checks:
   1. expected_tools                — tool names that must appear in tool_calls
-  2. expected_tool_output_contains — strings that must be present in raw tool outputs
-  3. expected_output_contains      — strings that must be present in the LLM response (case-insensitive)
-  4. expected_output_not_contains  — strings that must NOT be present in the LLM response (case-insensitive)
+  2. unexpected_tools              — tool names that must NOT appear in tool_calls
+  3. expected_tool_output_contains — strings that must be present in raw tool outputs
+  4. expected_output_contains      — strings that must be present in the LLM response (case-insensitive)
+  5. expected_output_not_contains  — strings that must NOT be present in the LLM response (case-insensitive)
 """
 
 import argparse
@@ -70,6 +71,7 @@ async def check_test_case(test_case: dict, base_url: str, session: aiohttp.Clien
     tc_id = test_case["id"]
     user_input = test_case["input"]
     expected_tools: list[str] = test_case.get("expected_tools", [])
+    unexpected_tools: list[str] = test_case.get("unexpected_tools", [])
     must_contain: list[str] = test_case.get("expected_output_contains", [])
     must_not_contain: list[str] = test_case.get("expected_output_not_contains", [])
     tool_must_contain: list[str] = test_case.get("expected_tool_output_contains", [])
@@ -125,6 +127,11 @@ async def check_test_case(test_case: dict, base_url: str, session: aiohttp.Clien
     for tool in expected_tools:
         if tool not in actual_tools:
             failures.append(f"Expected tool '{tool}' was not called. Actual tools: {actual_tools}")
+
+    # --- Check 1b: unexpected tools were NOT called ---
+    for tool in unexpected_tools:
+        if tool in actual_tools:
+            failures.append(f"Unexpected tool '{tool}' was called. Actual tools: {actual_tools}")
 
     # --- Check 2: response must contain these strings ---
     for phrase in must_contain:
