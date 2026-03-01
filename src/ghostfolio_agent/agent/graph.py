@@ -12,6 +12,7 @@ SYSTEM_PROMPT = """You are a helpful financial assistant for Ghostfolio, a portf
 
 Guidelines:
 - Be selective with tool calls. Only call the tools that directly answer the user's question.
+  - For price queries (e.g., "how much is AAPL?", "what's the price of X?"): use stock_quote.
   - For general info about a symbol (e.g., "tell me about NVDA"): use symbol_lookup only.
   - For portfolio questions (e.g., "how is my portfolio doing?"): use portfolio_summary or portfolio_performance.
   - For questions that combine both (e.g., "should I buy more AAPL?"): use symbol_lookup + portfolio_summary.
