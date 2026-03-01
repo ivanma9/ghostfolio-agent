@@ -3,6 +3,16 @@ import { v4 as uuidv4 } from 'uuid'
 import { postChat } from '../api/chat'
 import type { ChatMessage } from '../types'
 
+const SESSION_KEY = 'ghostfolio-session-id'
+
+function getOrCreateSessionId(): string {
+  const stored = localStorage.getItem(SESSION_KEY)
+  if (stored) return stored
+  const id = uuidv4()
+  localStorage.setItem(SESSION_KEY, id)
+  return id
+}
+
 interface UseChatOptions {
   onToolCall?: (toolCalls: string[]) => void
 }
@@ -17,7 +27,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { onToolCall } = options
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const sessionIdRef = useRef<string>(uuidv4())
+  const sessionIdRef = useRef<string>(getOrCreateSessionId())
 
   const sendMessage = useCallback(
     async (text: string, model?: string, paperTrading?: boolean) => {

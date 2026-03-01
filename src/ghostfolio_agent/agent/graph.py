@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
@@ -59,8 +59,55 @@ DEFAULT_MODEL = "gpt-4o-mini-direct"
 OPENAI_DIRECT_MODELS = {"gpt-4o-mini-direct": "gpt-4o-mini"}
 
 
+def _summarize_old_messages(messages: list) -> str:
+    """Build a deterministic summary of older conversation messages."""
+    user_topics: list[str] = []
+    tools_used: set[str] = set()
+    key_responses: list[str] = []
+
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            text = msg.content if isinstance(msg.content, str) else str(msg.content)
+            # Strip paper-trading prefix noise
+            if "User message:" in text:
+                text = text.split("User message:")[-1].strip()
+            user_topics.append(text[:150])
+        elif isinstance(msg, ToolMessage) and msg.name:
+            tools_used.add(msg.name)
+        elif isinstance(msg, AIMessage) and msg.content and isinstance(msg.content, str):
+            # Keep a brief snippet of each AI response for continuity
+            key_responses.append(msg.content[:200])
+
+    parts = ["[Summary of earlier conversation]"]
+    if user_topics:
+        parts.append("User asked about:")
+        for i, topic in enumerate(user_topics, 1):
+            parts.append(f"  {i}. {topic}")
+    if tools_used:
+        parts.append(f"Tools used: {', '.join(sorted(tools_used))}")
+    if key_responses:
+        parts.append("Key points from your earlier responses:")
+        for snippet in key_responses[-3:]:  # last 3 AI responses from the old window
+            parts.append(f"  - {snippet}")
+
+    return "\n".join(parts)
+
+
+def _compact_tool_message(msg: ToolMessage, max_chars: int = 300) -> ToolMessage:
+    """Truncate a tool message's content to save tokens."""
+    content = msg.content if isinstance(msg.content, str) else str(msg.content)
+    if len(content) <= max_chars:
+        return msg
+    truncated = content[:max_chars] + f"... [truncated, was {len(content)} chars]"
+    return ToolMessage(
+        content=truncated,
+        tool_call_id=msg.tool_call_id,
+        name=msg.name,
+    )
+
+
 def _make_context_trimmer(max_messages: int = 40):
-    """Create a pre_model_hook that trims messages to fit context window."""
+    """Create a pre_model_hook that compacts old messages and trims to fit context."""
 
     def trim_context(state):
         messages = state["messages"]
@@ -68,22 +115,37 @@ def _make_context_trimmer(max_messages: int = 40):
         if len(messages) <= max_messages:
             return {"llm_input_messages": messages}
 
-        # Keep the system message (if first) + last N messages
-        trimmed = []
+        # Separate system message
+        system_msg = None
+        conversation = messages
         if messages and isinstance(messages[0], SystemMessage):
-            trimmed.append(messages[0])
-            candidates = messages[1:]
-        else:
-            candidates = messages
+            system_msg = messages[0]
+            conversation = messages[1:]
 
-        tail = candidates[-(max_messages - len(trimmed)) :]
+        # Reserve slots: 1 for system, 1 for summary
+        keep_count = max_messages - (1 if system_msg else 0) - 1
+        old = conversation[:-keep_count]
+        recent = conversation[-keep_count:]
 
         # Don't start on an orphaned ToolMessage (needs preceding AIMessage)
-        while tail and hasattr(tail[0], "tool_call_id"):
-            tail = tail[1:]
+        while recent and hasattr(recent[0], "tool_call_id"):
+            recent = recent[1:]
 
-        trimmed.extend(tail)
-        return {"llm_input_messages": trimmed}
+        # Compact tool results in the recent window to save tokens
+        recent = [
+            _compact_tool_message(m) if isinstance(m, ToolMessage) else m
+            for m in recent
+        ]
+
+        # Build summary of old messages
+        summary = _summarize_old_messages(old)
+
+        result = []
+        if system_msg:
+            result.append(system_msg)
+        result.append(SystemMessage(content=summary))
+        result.extend(recent)
+        return {"llm_input_messages": result}
 
     return trim_context
 
