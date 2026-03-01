@@ -22,16 +22,28 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
         if not items:
             return f"Symbol '{symbol}' not found. Please check the ticker or company name."
 
-        # Prefer USD-denominated equities from YAHOO
+        # Prefer exact ticker match first, then USD equities from YAHOO
+        upper_symbol = symbol.upper().strip()
         best = items[0]
+        # Pass 1: exact ticker match with USD STOCK YAHOO
         for item in items:
             if (
-                item.get("currency") == "USD"
-                and item.get("assetSubClass") == "STOCK"
+                item.get("symbol", "").upper() == upper_symbol
+                and item.get("currency") == "USD"
                 and item.get("dataSource") == "YAHOO"
             ):
                 best = item
                 break
+        else:
+            # Pass 2: any USD STOCK from YAHOO
+            for item in items:
+                if (
+                    item.get("currency") == "USD"
+                    and item.get("assetSubClass") == "STOCK"
+                    and item.get("dataSource") == "YAHOO"
+                ):
+                    best = item
+                    break
 
         data_source = best.get("dataSource", "YAHOO")
         resolved_symbol = best.get("symbol", symbol)
