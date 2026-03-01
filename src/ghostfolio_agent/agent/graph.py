@@ -38,6 +38,8 @@ Available tools:
 - activity_log: Record real portfolio activities (buy, sell, dividend) in Ghostfolio
 
 For recording real trades, use activity_log. Always confirm details with the user before recording.
+
+ALERTS: Messages may be prefixed with "ALERTS:" containing proactive notifications about the user's portfolio. These are informational — briefly mention them in your response but do NOT call extra tools to investigate them. Only use tools to answer the user's actual question.
 """
 
 # OpenRouter model catalog
