@@ -6,6 +6,17 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.tools.conviction_score import (
+    compute_analyst_score,
+    compute_price_target_score,
+    compute_sentiment_score,
+    compute_earnings_score,
+    compute_composite,
+    ANALYST_WEIGHT,
+    PRICE_TARGET_WEIGHT,
+    SENTIMENT_WEIGHT,
+    EARNINGS_WEIGHT,
+)
 
 logger = structlog.get_logger()
 
@@ -94,6 +105,28 @@ def _format_price_targets(consensus: list[dict] | None, summary: list[dict] | No
 def _format_smart_summary(market_price: float, enrichment: dict) -> list[str]:
     """Compute actionable signals from enrichment data and return formatted lines."""
     signals: list[str] = []
+
+    # Compute conviction score from available enrichment data
+    conviction_components = []
+
+    a_score, a_expl = compute_analyst_score(enrichment.get("analyst"))
+    if a_score is not None:
+        conviction_components.append(("analyst", a_score, a_expl, ANALYST_WEIGHT))
+
+    pt_score, pt_expl = compute_price_target_score(enrichment.get("pt_consensus"), market_price)
+    if pt_score is not None:
+        conviction_components.append(("price_target", pt_score, pt_expl, PRICE_TARGET_WEIGHT))
+
+    s_score, s_expl = compute_sentiment_score(enrichment.get("news"))
+    if s_score is not None:
+        conviction_components.append(("sentiment", s_score, s_expl, SENTIMENT_WEIGHT))
+
+    e_score, e_expl = compute_earnings_score(enrichment.get("earnings"))
+    conviction_components.append(("earnings", e_score, e_expl, EARNINGS_WEIGHT))
+
+    composite, label, _ = compute_composite(conviction_components)
+    if composite is not None:
+        signals.append(f"  Conviction Score: {composite}/100 — {label}")
 
     # 1. Implied Upside/Downside from FMP price target consensus
     pt_consensus = enrichment.get("pt_consensus")
