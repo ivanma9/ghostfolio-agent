@@ -109,16 +109,70 @@ uv run python tests/eval/langsmith_upload_dataset.py
 uv run pytest tests/eval/test_langsmith_evals.py -v
 ```
 
+## Logging & Observability
+
+Structured logging via `structlog` with per-request correlation IDs.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `debug` | Python log level: `debug`, `info`, `warning`, `error` |
+| `LOG_FORMAT` | `json` | `json` for production, `console` for colored dev output |
+
+### Local Development
+
+```bash
+LOG_FORMAT=console LOG_LEVEL=debug uv run uvicorn ghostfolio_agent.main:app --reload --port 8000
+```
+
+Every request gets a unique `request_id` (UUID) that flows through all log events. It's also returned in the `x-request-id` response header.
+
+### Log Events
+
+| Event | Level | Description |
+|-------|-------|-------------|
+| `request_started` | info | Method, path, request_id |
+| `request_completed` | info | Method, path, status_code, duration_ms |
+| `client_request` | debug | Client name, URL, status_code, duration_ms |
+| `client_error` | warning | Client name, status_code, URL |
+| `client_retry` | warning | Client name, attempt number, delay |
+| `client_timeout` | warning | Client name, URL |
+| `enrichment_fetch_failed` | warning | Label, error (non-critical data source failed) |
+| `chat_request` | info | Session ID, model |
+| `verification_pipeline_complete` | info | Overall confidence, issue count |
+
+### Error Classification
+
+API client errors are automatically classified:
+
+- **AuthenticationError** (401/403) — bad token, never retried
+- **RateLimitError** (429 + soft limits) — Alpha Vantage/FMP return 200 with error JSON, detected automatically
+- **TransientError** (5xx, timeouts) — retried for Ghostfolio (2x with exponential backoff), fail-fast for enrichment clients
+
+### Railway
+
+```bash
+railway logs --filter "@level:error"          # errors only
+railway logs --filter "client_error"          # API client failures
+railway logs --filter "request_id:<uuid>"     # trace a specific request
+```
+
 ## Architecture
 
 ```
 frontend/          React (Vite) + Tailwind chat UI
 src/ghostfolio_agent/
   api/chat.py      POST /api/chat endpoint
+  api/middleware.py Request logging + correlation IDs
   agent/graph.py   LangGraph agent with Claude
-  tools/           6 tool implementations
-  clients/         Ghostfolio API client
-  verification/    Numerical accuracy checks
+  tools/           10 tool implementations
+  clients/         API clients (Ghostfolio, Finnhub, Alpha Vantage, FMP)
+  clients/base.py  BaseClient with pooling, retry, error classification
+  verification/    Response verification pipeline
+  logging_config.py Structlog configuration
+  utils.py         Shared utilities (safe_fetch)
+tests/unit/        Unit tests (213)
 tests/eval/        Golden-set evaluation suite
 ```
 
@@ -127,4 +181,4 @@ tests/eval/        Golden-set evaluation suite
 - **Backend**: FastAPI, LangGraph, LangChain, Claude Sonnet 4.6
 - **Frontend**: React, Vite, Tailwind CSS, Recharts
 - **Data**: Ghostfolio REST API, PostgreSQL, Redis
-- **Observability**: LangSmith (optional)
+- **Observability**: structlog (structured logging), LangSmith (optional)
