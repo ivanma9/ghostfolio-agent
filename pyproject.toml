@@ -20,6 +20,8 @@ dependencies = [
     "langsmith>=0.3",
     "python-dotenv>=1.0",
     "aiohttp>=3.13.3",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "filelock>=3.16",
     "rich>=14.3.3",
     "langchain-google-genai>=4.2.1",
 ]

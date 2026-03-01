@@ -2,13 +2,22 @@ import json
 import os
 import pathlib
 import re
+import tempfile
 from datetime import datetime, timezone
 
+from filelock import FileLock
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 
 _DATA_FILE = "data/paper_portfolio.json"
 _STARTING_CASH = 100_000.0
+
+_LOCK_FILE = "data/paper_portfolio.lock"
+
+
+def _get_lock() -> FileLock:
+    os.makedirs("data", exist_ok=True)
+    return FileLock(_LOCK_FILE, timeout=10)
 
 
 def load_portfolio() -> dict:
@@ -21,8 +30,14 @@ def load_portfolio() -> dict:
 
 def _save_portfolio(portfolio: dict) -> None:
     os.makedirs("data", exist_ok=True)
-    with open(_DATA_FILE, "w") as f:
-        json.dump(portfolio, f, indent=2)
+    fd, tmp = tempfile.mkstemp(dir="data", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(portfolio, f, indent=2)
+        os.replace(tmp, _DATA_FILE)
+    except:
+        os.unlink(tmp)
+        raise
 
 
 def _default_portfolio() -> dict:
@@ -76,7 +91,8 @@ def create_paper_trade_tool(client: GhostfolioClient):
 
         # ── RESET ──────────────────────────────────────────────────────────────
         if command == "reset":
-            _save_portfolio(_default_portfolio())
+            with _get_lock():
+                _save_portfolio(_default_portfolio())
             return f"Paper portfolio reset. Starting cash: ${_STARTING_CASH:,.2f}"
 
         # ── SHOW ───────────────────────────────────────────────────────────────
@@ -180,77 +196,78 @@ def create_paper_trade_tool(client: GhostfolioClient):
                     f"{resolved_symbol} at ${price:,.2f}."
                 )
 
-        portfolio = load_portfolio()
-        cash = portfolio["cash"]
-        positions = portfolio.setdefault("positions", {})
-        trades = portfolio.setdefault("trades", [])
+        with _get_lock():
+            portfolio = load_portfolio()
+            cash = portfolio["cash"]
+            positions = portfolio.setdefault("positions", {})
+            trades = portfolio.setdefault("trades", [])
 
-        total_cost = quantity * price
+            total_cost = quantity * price
 
-        if command == "buy":
-            if cash < total_cost:
+            if command == "buy":
+                if cash < total_cost:
+                    return (
+                        f"Insufficient cash. Need ${total_cost:,.2f} but only "
+                        f"${cash:,.2f} available."
+                    )
+                # Update position
+                if resolved_symbol in positions:
+                    pos = positions[resolved_symbol]
+                    old_qty = pos["quantity"]
+                    old_avg = pos["avg_cost"]
+                    new_qty = old_qty + quantity
+                    new_avg = (old_qty * old_avg + quantity * price) / new_qty
+                    pos["quantity"] = new_qty
+                    pos["avg_cost"] = new_avg
+                else:
+                    positions[resolved_symbol] = {"quantity": quantity, "avg_cost": price}
+
+                portfolio["cash"] = cash - total_cost
+                trades.append({
+                    "action": "BUY",
+                    "symbol": resolved_symbol,
+                    "quantity": quantity,
+                    "price": price,
+                    "total": total_cost,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                _save_portfolio(portfolio)
                 return (
-                    f"Insufficient cash. Need ${total_cost:,.2f} but only "
-                    f"${cash:,.2f} available."
+                    f"Paper Trade Executed: BUY {quantity:g} {resolved_symbol} @ ${price:,.2f} = ${total_cost:,.2f}\n"
+                    f"Cash remaining: ${portfolio['cash']:,.2f}"
                 )
-            # Update position
-            if resolved_symbol in positions:
+
+            if command == "sell":
+                if resolved_symbol not in positions:
+                    return f"No position in {resolved_symbol}. Cannot sell."
                 pos = positions[resolved_symbol]
-                old_qty = pos["quantity"]
-                old_avg = pos["avg_cost"]
-                new_qty = old_qty + quantity
-                new_avg = (old_qty * old_avg + quantity * price) / new_qty
-                pos["quantity"] = new_qty
-                pos["avg_cost"] = new_avg
-            else:
-                positions[resolved_symbol] = {"quantity": quantity, "avg_cost": price}
+                owned = pos["quantity"]
+                if quantity > owned:
+                    return (
+                        f"Cannot sell {quantity:g} shares of {resolved_symbol}; "
+                        f"only {owned:g} owned."
+                    )
+                proceeds = quantity * price
+                new_qty = owned - quantity
+                if new_qty == 0:
+                    del positions[resolved_symbol]
+                else:
+                    pos["quantity"] = new_qty
 
-            portfolio["cash"] = cash - total_cost
-            trades.append({
-                "action": "BUY",
-                "symbol": resolved_symbol,
-                "quantity": quantity,
-                "price": price,
-                "total": total_cost,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            _save_portfolio(portfolio)
-            return (
-                f"Paper Trade Executed: BUY {quantity:g} {resolved_symbol} @ ${price:,.2f} = ${total_cost:,.2f}\n"
-                f"Cash remaining: ${portfolio['cash']:,.2f}"
-            )
-
-        if command == "sell":
-            if resolved_symbol not in positions:
-                return f"No position in {resolved_symbol}. Cannot sell."
-            pos = positions[resolved_symbol]
-            owned = pos["quantity"]
-            if quantity > owned:
+                portfolio["cash"] = cash + proceeds
+                trades.append({
+                    "action": "SELL",
+                    "symbol": resolved_symbol,
+                    "quantity": quantity,
+                    "price": price,
+                    "total": proceeds,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                _save_portfolio(portfolio)
                 return (
-                    f"Cannot sell {quantity:g} shares of {resolved_symbol}; "
-                    f"only {owned:g} owned."
+                    f"Paper Trade Executed: SELL {quantity:g} {resolved_symbol} @ ${price:,.2f} = ${proceeds:,.2f}\n"
+                    f"Cash remaining: ${portfolio['cash']:,.2f}"
                 )
-            proceeds = quantity * price
-            new_qty = owned - quantity
-            if new_qty == 0:
-                del positions[resolved_symbol]
-            else:
-                pos["quantity"] = new_qty
-
-            portfolio["cash"] = cash + proceeds
-            trades.append({
-                "action": "SELL",
-                "symbol": resolved_symbol,
-                "quantity": quantity,
-                "price": price,
-                "total": proceeds,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            _save_portfolio(portfolio)
-            return (
-                f"Paper Trade Executed: SELL {quantity:g} {resolved_symbol} @ ${price:,.2f} = ${proceeds:,.2f}\n"
-                f"Cash remaining: ${portfolio['cash']:,.2f}"
-            )
 
         return "Unrecognised command."
 
