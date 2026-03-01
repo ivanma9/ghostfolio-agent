@@ -22,6 +22,7 @@ from ghostfolio_agent.tools.conviction_score import (
     SENTIMENT_WEIGHT,
     EARNINGS_WEIGHT,
 )
+from ghostfolio_agent.utils import safe_fetch
 
 logger = structlog.get_logger()
 
@@ -85,15 +86,6 @@ def generate_action_items(
     return items
 
 
-async def _safe_fetch(coro, label: str):
-    """Run a coroutine and return None on any exception."""
-    try:
-        return await coro
-    except Exception as exc:
-        logger.warning("briefing_fetch_failed", label=label, error=str(exc))
-        return None
-
-
 async def _fetch_macro(alpha_vantage: AlphaVantageClient | None) -> dict:
     """Fetch macro data, using cache if valid."""
     global _macro_cache
@@ -105,9 +97,9 @@ async def _fetch_macro(alpha_vantage: AlphaVantageClient | None) -> dict:
         return {}
 
     fed, cpi, treasury = await asyncio.gather(
-        _safe_fetch(alpha_vantage.get_fed_funds_rate(), "fed_funds"),
-        _safe_fetch(alpha_vantage.get_cpi(), "cpi"),
-        _safe_fetch(alpha_vantage.get_treasury_yield("10year"), "treasury"),
+        safe_fetch(alpha_vantage.get_fed_funds_rate(), "fed_funds"),
+        safe_fetch(alpha_vantage.get_cpi(), "cpi"),
+        safe_fetch(alpha_vantage.get_treasury_yield("10year"), "treasury"),
     )
 
     data = {}
@@ -118,8 +110,11 @@ async def _fetch_macro(alpha_vantage: AlphaVantageClient | None) -> dict:
     if treasury and treasury.get("data"):
         data["treasury_10y"] = treasury["data"][0].get("value", "N/A")
 
-    _macro_cache["data"] = data
-    _macro_cache["fetched_at"] = time.time()
+    if data:
+        _macro_cache["data"] = data
+        _macro_cache["fetched_at"] = time.time()
+    else:
+        logger.warning("macro_fetch_all_failed", message="All macro data sources returned None")
 
     return {**data, "cached": False}
 
@@ -164,8 +159,8 @@ def create_morning_briefing_tool(
         earnings_tasks = []
         for sym in symbols:
             if finnhub:
-                quote_tasks.append(_safe_fetch(finnhub.get_quote(sym), f"quote_{sym}"))
-                earnings_tasks.append(_safe_fetch(finnhub.get_earnings_calendar(sym), f"earnings_{sym}"))
+                quote_tasks.append(safe_fetch(finnhub.get_quote(sym), f"quote_{sym}"))
+                earnings_tasks.append(safe_fetch(finnhub.get_earnings_calendar(sym), f"earnings_{sym}"))
             else:
                 quote_tasks.append(_none())
                 earnings_tasks.append(_none())
@@ -247,11 +242,11 @@ def create_morning_briefing_tool(
             for sym in notable_symbols:
                 sym_tasks = {}
                 if alpha_vantage:
-                    sym_tasks["news"] = _safe_fetch(alpha_vantage.get_news_sentiment(sym), f"news_{sym}")
+                    sym_tasks["news"] = safe_fetch(alpha_vantage.get_news_sentiment(sym), f"news_{sym}")
                 if finnhub:
-                    sym_tasks["analyst"] = _safe_fetch(finnhub.get_analyst_recommendations(sym), f"analyst_{sym}")
+                    sym_tasks["analyst"] = safe_fetch(finnhub.get_analyst_recommendations(sym), f"analyst_{sym}")
                 if fmp:
-                    sym_tasks["pt"] = _safe_fetch(fmp.get_price_target_consensus(sym), f"pt_{sym}")
+                    sym_tasks["pt"] = safe_fetch(fmp.get_price_target_consensus(sym), f"pt_{sym}")
                 enrich_tasks[sym] = sym_tasks
 
             flat_keys = []

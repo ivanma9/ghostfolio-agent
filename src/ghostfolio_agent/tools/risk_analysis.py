@@ -14,13 +14,16 @@ def create_risk_analysis_tool(client: GhostfolioClient):
     async def risk_analysis() -> str:
         """Analyze portfolio risk including concentration risk, sector breakdown, and currency exposure. Use this when the user asks about risk, diversification, sector allocation, or currency exposure."""
         try:
-            holdings_data, details_data = await asyncio.gather(
-                client.get_portfolio_holdings(),
-                client.get_portfolio_details(),
-            )
+            holdings_data = await client.get_portfolio_holdings()
         except Exception as e:
             logger.error("risk_analysis_failed", error=str(e))
             return "Sorry, I couldn't analyze your portfolio risk right now. Please try again later."
+
+        details_data = None
+        try:
+            details_data = await client.get_portfolio_details()
+        except Exception as e:
+            logger.warning("risk_analysis_details_failed", error=str(e))
 
         raw_holdings = holdings_data.get("holdings", {}) if isinstance(holdings_data, dict) else {}
         # holdings can be a dict keyed by symbol or a list

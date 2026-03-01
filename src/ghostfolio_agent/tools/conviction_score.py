@@ -4,6 +4,7 @@ import asyncio
 import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.tools.cache import ttl_cache
+from ghostfolio_agent.utils import safe_fetch
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
@@ -174,15 +175,6 @@ def compute_composite(
     return composite, label, details
 
 
-async def _safe_fetch(coro, label: str):
-    """Run a coroutine and return None on any exception."""
-    try:
-        return await coro
-    except Exception as exc:
-        logger.warning("conviction_fetch_failed", label=label, error=str(exc))
-        return None
-
-
 # Component weights
 ANALYST_WEIGHT = 40
 PRICE_TARGET_WEIGHT = 30
@@ -217,19 +209,19 @@ def create_conviction_score_tool(
         task_labels = []
 
         if finnhub:
-            tasks.append(_safe_fetch(finnhub.get_quote(symbol), "quote"))
+            tasks.append(safe_fetch(finnhub.get_quote(symbol), "quote"))
             task_labels.append("quote")
-            tasks.append(_safe_fetch(finnhub.get_analyst_recommendations(symbol), "analyst"))
+            tasks.append(safe_fetch(finnhub.get_analyst_recommendations(symbol), "analyst"))
             task_labels.append("analyst")
-            tasks.append(_safe_fetch(finnhub.get_earnings_calendar(symbol), "earnings"))
+            tasks.append(safe_fetch(finnhub.get_earnings_calendar(symbol), "earnings"))
             task_labels.append("earnings")
 
         if alpha_vantage:
-            tasks.append(_safe_fetch(alpha_vantage.get_news_sentiment(symbol), "news"))
+            tasks.append(safe_fetch(alpha_vantage.get_news_sentiment(symbol), "news"))
             task_labels.append("news")
 
         if fmp:
-            tasks.append(_safe_fetch(fmp.get_price_target_consensus(symbol), "pt_consensus"))
+            tasks.append(safe_fetch(fmp.get_price_target_consensus(symbol), "pt_consensus"))
             task_labels.append("pt_consensus")
 
         results = await asyncio.gather(*tasks)

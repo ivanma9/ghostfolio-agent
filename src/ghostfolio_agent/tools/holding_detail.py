@@ -7,6 +7,7 @@ from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.tools.cache import ttl_cache
+from ghostfolio_agent.utils import safe_fetch
 from ghostfolio_agent.tools.conviction_score import (
     compute_analyst_score,
     compute_price_target_score,
@@ -20,15 +21,6 @@ from ghostfolio_agent.tools.conviction_score import (
 )
 
 logger = structlog.get_logger()
-
-
-async def _safe_fetch(coro, label: str):
-    """Run a coroutine and return None on any exception."""
-    try:
-        return await coro
-    except Exception as exc:
-        logger.warning("enrichment_fetch_failed", label=label, error=str(exc))
-        return None
 
 
 def _format_earnings(earnings: list[dict] | None) -> list[str]:
@@ -269,19 +261,19 @@ def create_holding_detail_tool(
         task_labels = []
 
         if finnhub:
-            enrichment_tasks.append(_safe_fetch(finnhub.get_earnings_calendar(resolved_symbol), "finnhub_earnings"))
+            enrichment_tasks.append(safe_fetch(finnhub.get_earnings_calendar(resolved_symbol), "finnhub_earnings"))
             task_labels.append("earnings")
-            enrichment_tasks.append(_safe_fetch(finnhub.get_analyst_recommendations(resolved_symbol), "finnhub_analyst"))
+            enrichment_tasks.append(safe_fetch(finnhub.get_analyst_recommendations(resolved_symbol), "finnhub_analyst"))
             task_labels.append("analyst")
 
         if alpha_vantage:
-            enrichment_tasks.append(_safe_fetch(alpha_vantage.get_news_sentiment(resolved_symbol), "av_news"))
+            enrichment_tasks.append(safe_fetch(alpha_vantage.get_news_sentiment(resolved_symbol), "av_news"))
             task_labels.append("news")
 
         if fmp:
-            enrichment_tasks.append(_safe_fetch(fmp.get_price_target_consensus(resolved_symbol), "fmp_pt_consensus"))
+            enrichment_tasks.append(safe_fetch(fmp.get_price_target_consensus(resolved_symbol), "fmp_pt_consensus"))
             task_labels.append("pt_consensus")
-            enrichment_tasks.append(_safe_fetch(fmp.get_price_target_summary(resolved_symbol), "fmp_pt_summary"))
+            enrichment_tasks.append(safe_fetch(fmp.get_price_target_summary(resolved_symbol), "fmp_pt_summary"))
             task_labels.append("pt_summary")
 
         if enrichment_tasks:

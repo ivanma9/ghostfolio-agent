@@ -5,9 +5,12 @@ import re
 import tempfile
 from datetime import datetime, timezone
 
+import structlog
 from filelock import FileLock
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 _DATA_FILE = "data/paper_portfolio.json"
 _STARTING_CASH = 100_000.0
@@ -35,7 +38,7 @@ def _save_portfolio(portfolio: dict) -> None:
         with os.fdopen(fd, "w") as f:
             json.dump(portfolio, f, indent=2)
         os.replace(tmp, _DATA_FILE)
-    except:
+    except Exception:
         os.unlink(tmp)
         raise
 
@@ -120,8 +123,8 @@ def create_paper_trade_tool(client: GhostfolioClient):
                             ds = items[0].get("dataSource", "YAHOO")
                             sym_data = await client.get_symbol(ds, sym)
                             current_price = sym_data.get("marketPrice", avg_cost) or avg_cost
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("paper_trade_price_fetch_failed", symbol=sym, error=str(e))
 
                     value = qty * current_price
                     cost = qty * avg_cost

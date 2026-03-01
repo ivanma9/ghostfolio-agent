@@ -1,7 +1,10 @@
+import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.tools.cache import ttl_cache
+
+logger = structlog.get_logger()
 
 
 def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | None = None):
@@ -39,8 +42,8 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
         try:
             sym_data = await client.get_symbol(data_source, resolved_symbol)
             ghostfolio_price = sym_data.get("marketPrice")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("stock_quote_ghostfolio_price_failed", symbol=resolved_symbol, error=str(e))
 
         # Try Finnhub for richer quote data
         if finnhub:
@@ -64,8 +67,8 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
                         f"  Prev Close: ${prev_close:,.2f}",
                     ]
                     return "\n".join(lines)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("stock_quote_finnhub_failed", symbol=resolved_symbol, error=str(e))
 
         # Fallback to Ghostfolio price only
         if ghostfolio_price:
