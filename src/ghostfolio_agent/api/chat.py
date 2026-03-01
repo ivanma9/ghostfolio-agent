@@ -1,10 +1,10 @@
 import asyncio
 import os
-import sqlite3
 
+import aiosqlite
 import structlog
 from fastapi import APIRouter, HTTPException
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Shared state
 _client: GhostfolioClient | None = None
-_checkpointer: SqliteSaver | None = None
+_checkpointer: AsyncSqliteSaver | None = None
 _agents: dict[str, object] = {}  # model_name -> agent
 _alert_engine: AlertEngine | None = None
 
@@ -52,30 +52,31 @@ def _get_client() -> GhostfolioClient:
 _DB_PATH = "data/checkpoints.db"
 
 
-def _get_checkpointer() -> SqliteSaver:
+async def _get_checkpointer() -> AsyncSqliteSaver:
     global _checkpointer
     if _checkpointer is None:
         db_dir = os.path.dirname(_DB_PATH)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
-        conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
-        _checkpointer = SqliteSaver(conn)
+        conn = await aiosqlite.connect(_DB_PATH)
+        _checkpointer = AsyncSqliteSaver(conn)
     return _checkpointer
 
 
-def _get_agent(model_name: str = DEFAULT_MODEL):
+async def _get_agent(model_name: str = DEFAULT_MODEL):
     global _agents
     if model_name not in _agents:
         settings = get_settings()
         finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
         alpha_vantage = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
         fmp = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
+        checkpointer = await _get_checkpointer()
         _agents[model_name] = create_agent(
             _get_client(),
             openrouter_api_key=settings.openrouter_api_key,
             openai_api_key=settings.openai_api_key,
             model_name=model_name,
-            checkpointer=_get_checkpointer(),
+            checkpointer=checkpointer,
             max_context_messages=settings.max_context_messages,
             finnhub=finnhub,
             alpha_vantage=alpha_vantage,
@@ -230,7 +231,7 @@ async def chat(request: ChatRequest):
     logger.info("chat_request", session_id=request.session_id, model=request.model)
     try:
         model = request.model or DEFAULT_MODEL
-        agent = _get_agent(model)
+        agent = await _get_agent(model)
 
         # Wrap message with paper trading instruction if enabled
         content = request.message
