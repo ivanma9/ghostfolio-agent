@@ -68,6 +68,12 @@ redis_data/
 !.vscode/extensions.json
 !.vscode/settings.json.example
 
+# Cursor
+.cursor/
+
+# Claude Code
+.claude/
+
 # JetBrains (PyCharm, IntelliJ, etc.)
 .idea/
 *.iml
