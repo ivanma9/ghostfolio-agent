@@ -7,14 +7,17 @@ from fastapi.staticfiles import StaticFiles
 import structlog
 
 from ghostfolio_agent.config import get_settings
+from ghostfolio_agent.logging_config import configure_logging
 from ghostfolio_agent.api.chat import router as chat_router
-
-logger = structlog.get_logger()
+from ghostfolio_agent.api.middleware import RequestLoggingMiddleware
 
 STATIC_DIR = pathlib.Path(__file__).resolve().parent.parent.parent / "static"
 
 
 settings = get_settings()
+configure_logging(log_level=settings.log_level, log_format=settings.log_format)
+
+logger = structlog.get_logger()
 
 
 @asynccontextmanager
@@ -40,6 +43,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(chat_router)
 
