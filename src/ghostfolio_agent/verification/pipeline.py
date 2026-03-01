@@ -55,7 +55,7 @@ async def run_verification_pipeline(
     if client and response_text:
         try:
             numerical_result = await verify_numerical_accuracy(response_text, client)
-            logger.info("verification_numerical_complete", confidence=numerical_result.confidence)
+            logger.debug("verification_numerical_complete", confidence=numerical_result.confidence)
         except Exception as e:
             logger.error("verification_numerical_failed", error=str(e))
 
@@ -67,7 +67,7 @@ async def run_verification_pipeline(
     hallucination_result = None
     try:
         hallucination_result = detect_hallucinations(response_text, tool_outputs)
-        logger.info("verification_hallucination_complete", confidence=hallucination_result.confidence)
+        logger.debug("verification_hallucination_complete", confidence=hallucination_result.confidence)
     except Exception as e:
         logger.error("verification_hallucination_failed", error=str(e))
 
@@ -85,7 +85,7 @@ async def run_verification_pipeline(
     output_result = None
     try:
         output_result = validate_output(response_text, tool_outputs)
-        logger.info("verification_output_complete", confidence=output_result.confidence)
+        logger.debug("verification_output_complete", confidence=output_result.confidence)
     except Exception as e:
         logger.error("verification_output_failed", error=str(e))
 
@@ -99,7 +99,7 @@ async def run_verification_pipeline(
         domain_result = check_domain_constraints(
             response_text, tool_outputs, portfolio_value
         )
-        logger.info("verification_domain_complete", confidence=domain_result.confidence)
+        logger.debug("verification_domain_complete", confidence=domain_result.confidence)
     except Exception as e:
         logger.error("verification_domain_failed", error=str(e))
 

@@ -36,8 +36,8 @@ class TestRequestLoggingMiddleware:
         assert "x-request-id" in response.headers
         assert len(response.headers["x-request-id"]) == 36
 
-    def test_logs_request_start_and_end(self, client):
+    def test_logs_request(self, client):
         with patch("ghostfolio_agent.api.middleware.logger") as mock_logger:
             response = client.get("/test")
             assert response.status_code == 200
-            assert mock_logger.info.call_count >= 2
+            assert mock_logger.info.call_count == 1

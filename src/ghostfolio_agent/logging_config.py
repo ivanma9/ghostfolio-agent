@@ -65,3 +65,10 @@ def configure_logging(log_level: str = "info", log_format: str = "json") -> None
     handler.setFormatter(formatter)
     root.addHandler(handler)
     root.setLevel(numeric_level)
+
+    # Silence noisy third-party loggers
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("anthropic").setLevel(logging.WARNING)
