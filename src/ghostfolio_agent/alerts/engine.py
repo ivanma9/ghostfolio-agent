@@ -1,7 +1,13 @@
 """AlertEngine — detects notable portfolio conditions and enforces per-key cooldowns."""
 
+import asyncio
 import time
+import structlog
 from datetime import date
+from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
+from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.tools.conviction_score import (
     compute_analyst_score,
     compute_price_target_score,
@@ -16,6 +22,17 @@ from ghostfolio_agent.tools.conviction_score import (
 )
 
 COOLDOWN_TTL = 86400  # 24 hours in seconds
+
+logger = structlog.get_logger()
+
+
+async def _safe_fetch(coro, label: str):
+    """Run a coroutine and return None on any exception."""
+    try:
+        return await coro
+    except Exception as exc:
+        logger.warning("alert_fetch_failed", label=label, error=str(exc))
+        return None
 
 
 class AlertEngine:
@@ -115,6 +132,155 @@ class AlertEngine:
             f"{symbol} analyst consensus shifted to Sell"
             f" ({bullish} of {total} analysts bullish) — monitor closely"
         )
+
+    async def check_alerts(
+        self,
+        client: GhostfolioClient,
+        finnhub: FinnhubClient | None = None,
+        alpha_vantage: AlphaVantageClient | None = None,
+        fmp: FMPClient | None = None,
+    ) -> list[str]:
+        """Run two-phase alert checks across all portfolio holdings.
+
+        Phase 1: parallel quote + earnings fetch for all symbols (Finnhub).
+        Phase 2: for flagged symbols only, fetch analyst/sentiment/price-target data.
+        Cooldown suppresses repeat alerts within COOLDOWN_TTL seconds.
+        """
+        # Short-circuit if no external clients provided
+        if finnhub is None and alpha_vantage is None and fmp is None:
+            return []
+
+        # Fetch holdings
+        try:
+            holdings_resp = await client.get_portfolio_holdings()
+        except Exception as exc:
+            logger.warning("alert_holdings_fetch_failed", error=str(exc))
+            return []
+
+        holdings: dict = holdings_resp.get("holdings", {})
+        if not holdings:
+            return []
+
+        symbols = list(holdings.keys())
+        alerts: list[str] = []
+        today = date.today()
+
+        # ------------------------------------------------------------------
+        # Phase 1: parallel quote + earnings for all symbols
+        # ------------------------------------------------------------------
+        phase1_tasks: list = []
+        if finnhub is not None:
+            for sym in symbols:
+                phase1_tasks.append(_safe_fetch(finnhub.get_quote(sym), f"quote:{sym}"))
+                phase1_tasks.append(
+                    _safe_fetch(finnhub.get_earnings_calendar(sym), f"earnings:{sym}")
+                )
+            phase1_results = await asyncio.gather(*phase1_tasks)
+        else:
+            phase1_results = []
+
+        # Unpack phase 1 results (pairs: quote, earnings per symbol)
+        quotes: dict[str, dict | None] = {}
+        earnings_map: dict[str, list | None] = {}
+        if finnhub is not None:
+            for i, sym in enumerate(symbols):
+                quotes[sym] = phase1_results[i * 2]
+                earnings_map[sym] = phase1_results[i * 2 + 1]
+        else:
+            for sym in symbols:
+                quotes[sym] = None
+                earnings_map[sym] = None
+
+        # Evaluate phase 1 conditions; collect flagged symbols for phase 2
+        flagged_symbols: set[str] = set()
+        for sym in symbols:
+            earnings_result = self._check_earnings_proximity(sym, earnings_map.get(sym), today)
+            key = f"{sym}:earnings"
+            if earnings_result and self._is_cooled_down(key):
+                alerts.append(earnings_result)
+                self._record(key)
+                flagged_symbols.add(sym)
+
+            big_mover_result = self._check_big_mover(sym, quotes.get(sym))
+            key = f"{sym}:big_mover"
+            if big_mover_result and self._is_cooled_down(key):
+                alerts.append(big_mover_result)
+                self._record(key)
+                flagged_symbols.add(sym)
+
+        # ------------------------------------------------------------------
+        # Phase 2: deeper enrichment for flagged symbols only
+        # ------------------------------------------------------------------
+        if not flagged_symbols:
+            return alerts
+
+        phase2_tasks: list = []
+        phase2_meta: list[tuple[str, str]] = []  # (symbol, data_type)
+
+        for sym in flagged_symbols:
+            if finnhub is not None:
+                phase2_tasks.append(
+                    _safe_fetch(
+                        finnhub.get_analyst_recommendations(sym), f"analyst:{sym}"
+                    )
+                )
+                phase2_meta.append((sym, "analyst"))
+
+            if alpha_vantage is not None:
+                phase2_tasks.append(
+                    _safe_fetch(
+                        alpha_vantage.get_news_sentiment(sym), f"news:{sym}"
+                    )
+                )
+                phase2_meta.append((sym, "news"))
+
+            if fmp is not None:
+                phase2_tasks.append(
+                    _safe_fetch(
+                        fmp.get_price_target_consensus(sym), f"pt:{sym}"
+                    )
+                )
+                phase2_meta.append((sym, "price_target"))
+
+        phase2_results = await asyncio.gather(*phase2_tasks) if phase2_tasks else []
+
+        # Collect phase 2 data per symbol
+        analyst_map: dict[str, list | None] = {sym: None for sym in flagged_symbols}
+        news_map: dict[str, list | None] = {sym: None for sym in flagged_symbols}
+        pt_map: dict[str, list | None] = {sym: None for sym in flagged_symbols}
+
+        for (sym, data_type), result in zip(phase2_meta, phase2_results):
+            if data_type == "analyst":
+                analyst_map[sym] = result
+            elif data_type == "news":
+                news_map[sym] = result
+            elif data_type == "price_target":
+                pt_map[sym] = result
+
+        # Evaluate phase 2 conditions
+        for sym in flagged_symbols:
+            market_price = (quotes.get(sym) or {}).get("c", 0.0) or 0.0
+
+            analyst_result = self._check_analyst_downgrade(sym, analyst_map.get(sym))
+            key = f"{sym}:analyst_downgrade"
+            if analyst_result and self._is_cooled_down(key):
+                alerts.append(analyst_result)
+                self._record(key)
+
+            conviction_result = self._check_low_conviction(
+                symbol=sym,
+                analyst_data=analyst_map.get(sym),
+                pt_data=pt_map.get(sym),
+                news_data=news_map.get(sym),
+                earnings_data=earnings_map.get(sym),
+                market_price=market_price,
+            )
+            key = f"{sym}:low_conviction"
+            if conviction_result and self._is_cooled_down(key):
+                alerts.append(conviction_result)
+                self._record(key)
+
+        return alerts
 
     def _check_low_conviction(
         self,

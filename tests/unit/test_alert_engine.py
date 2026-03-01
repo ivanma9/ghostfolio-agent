@@ -3,12 +3,14 @@
 import time
 import pytest
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from ghostfolio_agent.alerts.engine import (
     AlertEngine,
     COOLDOWN_TTL,
 )
+from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.clients.finnhub import FinnhubClient
 
 
 # ---------------------------------------------------------------------------
@@ -222,3 +224,100 @@ class TestCheckLowConviction:
             market_price=0.0,
         )
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — check_alerts integration
+# ---------------------------------------------------------------------------
+
+HOLDINGS_RESPONSE = {
+    "holdings": {
+        "AAPL": {
+            "symbol": "AAPL",
+            "name": "Apple Inc.",
+            "quantity": 10,
+            "valueInBaseCurrency": 2000.0,
+        },
+        "TSLA": {
+            "symbol": "TSLA",
+            "name": "Tesla Inc.",
+            "quantity": 5,
+            "valueInBaseCurrency": 1000.0,
+        },
+    }
+}
+
+
+@pytest.fixture
+def mock_ghostfolio():
+    client = MagicMock(spec=GhostfolioClient)
+    client.get_portfolio_holdings = AsyncMock(return_value=HOLDINGS_RESPONSE)
+    return client
+
+
+@pytest.fixture
+def mock_finnhub():
+    client = MagicMock(spec=FinnhubClient)
+    today = date.today()
+    earnings_date = (today + timedelta(days=2)).isoformat()
+
+    async def mock_quote(symbol):
+        return {
+            "AAPL": {"c": 200.0, "dp": -6.0, "d": -12.0},
+            "TSLA": {"c": 180.0, "dp": 1.0, "d": 1.8},
+        }.get(symbol, {"c": 0, "dp": 0, "d": 0})
+
+    async def mock_earnings(symbol):
+        return {
+            "TSLA": [{"date": earnings_date}],
+        }.get(symbol, [])
+
+    async def mock_analyst(symbol):
+        return {
+            "AAPL": [{"strongBuy": 1, "buy": 1, "hold": 2, "sell": 4, "strongSell": 3}],
+        }.get(symbol, [])
+
+    client.get_quote = MagicMock(side_effect=mock_quote)
+    client.get_earnings_calendar = MagicMock(side_effect=mock_earnings)
+    client.get_analyst_recommendations = MagicMock(side_effect=mock_analyst)
+    return client
+
+
+class TestCheckAlerts:
+    @pytest.mark.asyncio
+    async def test_finds_big_mover_and_earnings(self, mock_ghostfolio, mock_finnhub):
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub)
+        alert_text = "\n".join(alerts)
+        assert "AAPL" in alert_text
+        assert "TSLA" in alert_text
+
+    @pytest.mark.asyncio
+    async def test_cooldown_suppresses_repeat(self, mock_ghostfolio, mock_finnhub):
+        engine = AlertEngine()
+        alerts1 = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub)
+        assert len(alerts1) > 0
+        alerts2 = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub)
+        assert len(alerts2) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_clients_returns_empty(self, mock_ghostfolio):
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(mock_ghostfolio)
+        assert alerts == []
+
+    @pytest.mark.asyncio
+    async def test_empty_portfolio_returns_empty(self, mock_finnhub):
+        client = MagicMock(spec=GhostfolioClient)
+        client.get_portfolio_holdings = AsyncMock(return_value={"holdings": {}})
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(client, finnhub=mock_finnhub)
+        assert alerts == []
+
+    @pytest.mark.asyncio
+    async def test_holdings_fetch_failure_returns_empty(self, mock_finnhub):
+        client = MagicMock(spec=GhostfolioClient)
+        client.get_portfolio_holdings = AsyncMock(side_effect=Exception("API error"))
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(client, finnhub=mock_finnhub)
+        assert alerts == []
