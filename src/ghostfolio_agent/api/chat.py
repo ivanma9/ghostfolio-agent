@@ -1,8 +1,10 @@
 import asyncio
+import os
+import sqlite3
 
 import structlog
 from fastapi import APIRouter
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -23,7 +25,7 @@ router = APIRouter()
 
 # Shared state
 _client: GhostfolioClient | None = None
-_checkpointer: InMemorySaver | None = None
+_checkpointer: SqliteSaver | None = None
 _agents: dict[str, object] = {}  # model_name -> agent
 
 
@@ -38,10 +40,17 @@ def _get_client() -> GhostfolioClient:
     return _client
 
 
-def _get_checkpointer() -> InMemorySaver:
+_DB_PATH = "data/checkpoints.db"
+
+
+def _get_checkpointer() -> SqliteSaver:
     global _checkpointer
     if _checkpointer is None:
-        _checkpointer = InMemorySaver()
+        db_dir = os.path.dirname(_DB_PATH)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+        _checkpointer = SqliteSaver(conn)
     return _checkpointer
 
 
