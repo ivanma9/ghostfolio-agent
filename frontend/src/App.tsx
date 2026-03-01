@@ -12,7 +12,7 @@ function App() {
 
   const handleToolCall = useCallback(
     (toolCalls: string[]) => {
-      if (toolCalls.includes('portfolio_summary') || toolCalls.includes('paper_trade')) {
+      if (toolCalls.includes('portfolio_summary') || toolCalls.includes('paper_trade') || toolCalls.includes('morning_briefing')) {
         sidebar.refresh()
       }
     },

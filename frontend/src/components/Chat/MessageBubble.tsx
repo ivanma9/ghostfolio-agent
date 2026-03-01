@@ -57,6 +57,18 @@ function stripRawData(content: string, toolCalls: string[]): string {
       if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes('|')) return false
     }
 
+    // Strip raw morning briefing data lines when RichCard renders them
+    if (toolCalls.includes('morning_briefing')) {
+      if (/^\s*(Total Value:|Daily Change:|Holdings:)\s/i.test(trimmed)) return false
+      if (/^\s*[▲▼]\s+\w+/.test(trimmed)) return false
+      if (/^\s*(Fed Funds Rate:|CPI:|10Y Treasury Yield:)\s/i.test(trimmed)) return false
+      if (/^\s*•\s+/.test(trimmed)) return false
+      if (/^\s*(Portfolio Overview|Top Movers|Earnings Watch|Market Signals|Macro Snapshot|Action Items):?\s*$/i.test(trimmed)) return false
+      if (/^\s*Sentiment=/.test(trimmed)) return false
+      if (/^\s*Flags:/.test(trimmed)) return false
+      if (/^\s*\w+\s+\([^)]+\):\s*(Sentiment=|\d{4}-\d{2}-\d{2}\s*\(in)/.test(trimmed)) return false
+    }
+
     return true
   })
 

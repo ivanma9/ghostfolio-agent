@@ -116,6 +116,45 @@ export interface PaperTradeResult {
   cashRemaining: number
 }
 
+export interface MorningBriefingData {
+  briefingDate: string
+  portfolioOverview: {
+    totalValue: number
+    dailyChange: number
+    dailyChangeAmount: number
+    holdingsCount: number
+  }
+  topMovers: Array<{
+    symbol: string
+    name: string
+    dailyChange: number
+    currentPrice: number
+    direction: 'up' | 'down'
+  }>
+  earningsWatch: Array<{
+    symbol: string
+    name: string
+    earningsDate: string
+    daysUntil: number
+  }>
+  marketSignals: Array<{
+    symbol: string
+    name: string
+    sentimentLabel: string
+    analystConsensus: string
+    convictionScore: number | null
+    convictionLabel: string
+    flags: string[]
+  }>
+  macroSnapshot: {
+    fedFundsRate: string
+    cpi: string
+    treasury10y: string
+    cached: boolean
+  }
+  actionItems: string[]
+}
+
 // Holding Detail (Smart Deep Dive)
 export interface HoldingDetailData {
   name: string

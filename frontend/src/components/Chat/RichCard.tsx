@@ -1,5 +1,5 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import type { Holding, Transaction, SymbolInfo, PerformanceData, RiskData, PaperPortfolio, PaperTradeResult, HoldingDetailData } from '../../types'
+import type { Holding, Transaction, SymbolInfo, PerformanceData, RiskData, PaperPortfolio, PaperTradeResult, HoldingDetailData, MorningBriefingData } from '../../types'
 
 // ── Parsers ──────────────────────────────────────────────────────────────────
 
@@ -367,6 +367,94 @@ export function parseHoldingDetail(text: string): HoldingDetailData | null {
     unrealizedPnl, unrealizedPnlPercent, dividends, firstBuy, transactionCount,
     earnings, analystCounts, news, priceTargets,
     impliedMove, analystSignal, sentiment, earningsAlert,
+  }
+}
+
+function parseMorningBriefing(text: string): MorningBriefingData | null {
+  if (!text.includes('Morning Briefing:')) return null
+
+  const dateMatch = text.match(/Morning Briefing:\s*(.+)/)
+  const briefingDate = dateMatch?.[1]?.trim() || new Date().toLocaleDateString()
+
+  const totalValueMatch = text.match(/Total Value:\s*\$([\d,]+\.?\d*)/)
+  const dailyChangeMatch = text.match(/Daily Change:\s*([+-]?[\d.]+)%\s*\(\$([+-]?[\d,.]+)\)/)
+  const holdingsCountMatch = text.match(/Holdings:\s*(\d+)/)
+
+  const portfolioOverview = {
+    totalValue: totalValueMatch ? parseFloat(totalValueMatch[1].replace(/,/g, '')) : 0,
+    dailyChange: dailyChangeMatch ? parseFloat(dailyChangeMatch[1]) : 0,
+    dailyChangeAmount: dailyChangeMatch ? parseFloat(dailyChangeMatch[2].replace(/,/g, '')) : 0,
+    holdingsCount: holdingsCountMatch ? parseInt(holdingsCountMatch[1]) : 0,
+  }
+
+  const topMovers: MorningBriefingData['topMovers'] = []
+  const moverRegex = /[▲▼]\s+(\w+)\s+\(([^)]+)\):\s*([+-]?[\d.]+)%\s*@\s*\$([\d,]+\.?\d*)/g
+  let match
+  while ((match = moverRegex.exec(text)) !== null) {
+    topMovers.push({
+      symbol: match[1],
+      name: match[2],
+      dailyChange: parseFloat(match[3]),
+      currentPrice: parseFloat(match[4].replace(/,/g, '')),
+      direction: match[3].startsWith('-') ? 'down' : 'up',
+    })
+  }
+
+  const earningsWatch: MorningBriefingData['earningsWatch'] = []
+  const earningsSection = text.match(/Earnings Watch:[\s\S]*?(?=\n\n|\nMarket Signals:)/)?.[0] || ''
+  const earningsRegex = /(\w+)\s+\(([^)]+)\):\s*(\d{4}-\d{2}-\d{2})\s*\(in\s+(\d+)\s+days?\)/g
+  while ((match = earningsRegex.exec(earningsSection)) !== null) {
+    earningsWatch.push({
+      symbol: match[1],
+      name: match[2],
+      earningsDate: match[3],
+      daysUntil: parseInt(match[4]),
+    })
+  }
+
+  const marketSignals: MorningBriefingData['marketSignals'] = []
+  const signalRegex = /(\w+)\s+\(([^)]+)\):\s*Sentiment=(\w+),\s*Analyst=([^,]+),\s*Conviction=(?:(\d+)\/100\s*\(([^)]+)\)|N\/A)/g
+  const signalsSection = text.match(/Market Signals:[\s\S]*?(?=\n\nMacro Snapshot:)/)?.[0] || text
+  while ((match = signalRegex.exec(signalsSection)) !== null) {
+    const afterMatch = signalsSection.slice(match.index + match[0].length, match.index + match[0].length + 200)
+    const flagsMatch = afterMatch.match(/^\s*\n\s*Flags:\s*(.+)/)
+    const flags = flagsMatch ? flagsMatch[1].split(',').map((f: string) => f.trim()) : []
+    marketSignals.push({
+      symbol: match[1],
+      name: match[2],
+      sentimentLabel: match[3],
+      analystConsensus: match[4].trim(),
+      convictionScore: match[5] ? parseInt(match[5]) : null,
+      convictionLabel: match[6] || 'N/A',
+      flags,
+    })
+  }
+
+  const fedMatch = text.match(/Fed Funds Rate:\s*([\d.]+)%/)
+  const cpiMatch = text.match(/CPI:\s*([\d.]+)%/)
+  const treasuryMatch = text.match(/10Y Treasury Yield:\s*([\d.]+)%/)
+  const cachedMatch = text.includes('(cached)')
+  const macroSnapshot = {
+    fedFundsRate: fedMatch?.[1] || 'N/A',
+    cpi: cpiMatch?.[1] || 'N/A',
+    treasury10y: treasuryMatch?.[1] || 'N/A',
+    cached: cachedMatch,
+  }
+
+  const actionItems: string[] = []
+  const actionRegex = /•\s+(.+)/g
+  while ((match = actionRegex.exec(text)) !== null) {
+    actionItems.push(match[1].trim())
+  }
+
+  return {
+    briefingDate,
+    portfolioOverview,
+    topMovers,
+    earningsWatch,
+    marketSignals,
+    macroSnapshot,
+    actionItems,
   }
 }
 
@@ -928,6 +1016,166 @@ function HoldingDetailCard({ data }: { data: HoldingDetailData }) {
   )
 }
 
+function MorningBriefingCard({ data }: { data: MorningBriefingData }) {
+  const isPositive = data.portfolioOverview.dailyChange >= 0
+  const changeColor = isPositive ? 'text-emerald-600' : 'text-red-500'
+  const changeBg = isPositive ? 'bg-emerald-50' : 'bg-red-50'
+
+  return (
+    <div className="mt-3 space-y-3">
+      {/* Portfolio Overview */}
+      <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-xl p-4 border border-indigo-100">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-indigo-900">Portfolio Overview</h3>
+          <span className="text-xs text-indigo-500">{data.briefingDate}</span>
+        </div>
+        <div className="text-2xl font-bold text-gray-900">
+          ${data.portfolioOverview.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <span className={`text-sm font-semibold ${changeColor}`}>
+            {data.portfolioOverview.dailyChange >= 0 ? '+' : ''}{data.portfolioOverview.dailyChange.toFixed(1)}%
+          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${changeBg} ${changeColor}`}>
+            ${data.portfolioOverview.dailyChangeAmount >= 0 ? '+' : ''}{data.portfolioOverview.dailyChangeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+          <span className="text-xs text-gray-500">{data.portfolioOverview.holdingsCount} holdings</span>
+        </div>
+      </div>
+
+      {/* Top Movers */}
+      {data.topMovers.length > 0 && (
+        <div className="bg-white rounded-xl p-4 border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Top Movers</h3>
+          <div className="space-y-2">
+            {data.topMovers.map((m) => (
+              <div key={m.symbol} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`text-lg ${m.direction === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {m.direction === 'up' ? '▲' : '▼'}
+                  </span>
+                  <div>
+                    <span className="font-semibold text-sm text-gray-900">{m.symbol}</span>
+                    <span className="text-xs text-gray-500 ml-1">{m.name}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`text-sm font-semibold ${m.direction === 'up' ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {m.dailyChange >= 0 ? '+' : ''}{m.dailyChange.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-gray-500 ml-2">${m.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Earnings Watch */}
+      {data.earningsWatch.length > 0 && (
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+          <h3 className="text-sm font-semibold text-amber-800 mb-2">Earnings Watch</h3>
+          <div className="space-y-2">
+            {data.earningsWatch.map((e) => (
+              <div key={e.symbol} className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-sm text-gray-900">{e.symbol}</span>
+                  <span className="text-xs text-gray-600 ml-1">{e.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600">{e.earningsDate}</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">
+                    in {e.daysUntil} days
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Market Signals */}
+      {data.marketSignals.length > 0 && (
+        <div className="bg-white rounded-xl p-4 border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Market Signals</h3>
+          <div className="space-y-3">
+            {data.marketSignals.map((s) => (
+              <div key={s.symbol} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900">{s.symbol}</span>
+                  <span className="text-xs text-gray-500">{s.name}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    s.sentimentLabel === 'Bullish' ? 'bg-emerald-100 text-emerald-700' :
+                    s.sentimentLabel === 'Bearish' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {s.sentimentLabel}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                    {s.analystConsensus}
+                  </span>
+                  {s.convictionScore !== null && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      s.convictionScore >= 61 ? 'bg-emerald-100 text-emerald-700' :
+                      s.convictionScore >= 41 ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {s.convictionScore}/100 {s.convictionLabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Macro Snapshot */}
+      {(data.macroSnapshot.fedFundsRate !== 'N/A' || data.macroSnapshot.cpi !== 'N/A') && (
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-600">Macro Snapshot</h3>
+            {data.macroSnapshot.cached && (
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider">cached</span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <div className="text-xs text-gray-500">Fed Funds</div>
+              <div className="text-sm font-semibold text-gray-800">{data.macroSnapshot.fedFundsRate}%</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">CPI</div>
+              <div className="text-sm font-semibold text-gray-800">{data.macroSnapshot.cpi}%</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">10Y Treasury</div>
+              <div className="text-sm font-semibold text-gray-800">{data.macroSnapshot.treasury10y}%</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Items */}
+      {data.actionItems.length > 0 && (
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-300">
+          <h3 className="text-sm font-semibold text-amber-800 mb-2">Action Items</h3>
+          <ul className="space-y-1.5">
+            {data.actionItems.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                <span className="mt-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 interface RichCardProps {
@@ -975,6 +1223,11 @@ export default function RichCard({ toolCalls, content }: RichCardProps) {
   if (toolCalls.includes('holding_detail')) {
     const data = parseHoldingDetail(content)
     if (data) return <HoldingDetailCard data={data} />
+  }
+
+  if (toolCalls.includes('morning_briefing')) {
+    const data = parseMorningBriefing(content)
+    if (data) return <MorningBriefingCard data={data} />
   }
 
   return null

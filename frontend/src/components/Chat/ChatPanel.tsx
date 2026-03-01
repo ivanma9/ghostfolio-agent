@@ -16,9 +16,9 @@ interface ChatPanelProps {
 }
 
 const SUGGESTED_QUERIES = [
+  'Morning Briefing',
   "What's in my portfolio?",
   'Show my recent transactions',
-  'Look up NVDA',
 ]
 
 const PAPER_TRADE_QUERIES = [
