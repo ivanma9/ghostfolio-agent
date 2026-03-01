@@ -54,7 +54,8 @@ def _get_agent(model_name: str = DEFAULT_MODEL):
         fmp = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
         _agents[model_name] = create_agent(
             _get_client(),
-            api_key=settings.openrouter_api_key,
+            openrouter_api_key=settings.openrouter_api_key,
+            openai_api_key=settings.openai_api_key,
             model_name=model_name,
             checkpointer=_get_checkpointer(),
             max_context_messages=settings.max_context_messages,

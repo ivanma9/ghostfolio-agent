@@ -37,7 +37,7 @@ Available tools:
 For recording real trades, use activity_log. Always confirm details with the user before recording.
 """
 
-# OpenRouter model catalog — id is what OpenRouter expects
+# OpenRouter model catalog
 AVAILABLE_MODELS = [
     {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet 4", "provider": "Anthropic"},
     {"id": "anthropic/claude-haiku-4", "name": "Claude Haiku 4", "provider": "Anthropic"},
@@ -48,9 +48,14 @@ AVAILABLE_MODELS = [
     {"id": "google/gemini-2.0-flash-001", "name": "Gemini 2.0 Flash", "provider": "Google"},
     {"id": "deepseek/deepseek-chat-v3-0324", "name": "DeepSeek V3", "provider": "DeepSeek"},
     {"id": "meta-llama/llama-4-maverick", "name": "Llama 4 Maverick", "provider": "Meta"},
+    # OpenAI direct (bypasses OpenRouter — cheap for evals)
+    {"id": "gpt-4o-mini-direct", "name": "GPT-4o Mini (Direct)", "provider": "OpenAI Direct"},
 ]
 
-DEFAULT_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_MODEL = "gpt-4o-mini-direct"
+
+# Models that go direct to provider instead of through OpenRouter
+OPENAI_DIRECT_MODELS = {"gpt-4o-mini-direct": "gpt-4o-mini"}
 
 
 def _make_context_trimmer(max_messages: int = 40):
@@ -84,7 +89,8 @@ def _make_context_trimmer(max_messages: int = 40):
 
 def create_agent(
     client: GhostfolioClient,
-    api_key: str,
+    openrouter_api_key: str = "",
+    openai_api_key: str = "",
     model_name: str = DEFAULT_MODEL,
     checkpointer=None,
     max_context_messages: int = 40,
@@ -92,15 +98,25 @@ def create_agent(
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
 ):
-    """Create a LangGraph agent with Ghostfolio tools, using OpenRouter."""
-    llm = ChatOpenAI(
-        model=model_name,
-        api_key=api_key,
-        base_url="https://openrouter.ai/api/v1",
-        temperature=0,
-        max_tokens=4096,
-        request_timeout=60,
-    )
+    """Create a LangGraph agent with Ghostfolio tools."""
+    if model_name in OPENAI_DIRECT_MODELS:
+        llm = ChatOpenAI(
+            model=OPENAI_DIRECT_MODELS[model_name],
+            api_key=openai_api_key,
+            temperature=0,
+            max_tokens=4096,
+            request_timeout=60,
+        )
+    else:
+        llm = ChatOpenAI(
+            model=model_name,
+            api_key=openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1",
+            temperature=0,
+            max_tokens=4096,
+            request_timeout=60,
+        )
+
     tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp)
     agent = create_react_agent(
         llm,

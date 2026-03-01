@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # LLM
     anthropic_api_key: str = ""
     openrouter_api_key: str = ""
+    openai_api_key: str = ""
 
     # Ghostfolio
     ghostfolio_base_url: str = "http://localhost:3333"
