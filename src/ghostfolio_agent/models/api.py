@@ -41,6 +41,9 @@ class ChatResponse(BaseModel):
     verification_details: dict[str, str] = Field(
         default_factory=dict, description="Per-verifier confidence map"
     )
+    data_sources: list[str] = Field(
+        default_factory=list, description="3rd-party data sources used in this response"
+    )
 
 
 class HealthResponse(BaseModel):
