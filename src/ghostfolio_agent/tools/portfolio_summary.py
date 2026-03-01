@@ -10,7 +10,7 @@ def create_portfolio_summary_tool(client: GhostfolioClient):
     @tool
     @ttl_cache(ttl=30)
     async def portfolio_summary() -> str:
-        """Get a summary of the user's portfolio including all holdings, their current values, allocations, and total portfolio value. Use this when the user asks about their portfolio, holdings, positions, or allocation."""
+        """Get a summary of the user's portfolio including all holdings, their current values, allocations, and total portfolio value. Use this ONLY when the user asks about their own portfolio, holdings, positions, or allocation. Do NOT use for general stock price queries."""
         try:
             data = await client.get_portfolio_holdings()
         except Exception as e:

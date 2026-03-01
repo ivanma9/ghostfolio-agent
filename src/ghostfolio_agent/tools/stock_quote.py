@@ -11,7 +11,7 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
     @tool
     @ttl_cache(ttl=60)
     async def stock_quote(symbol: str) -> str:
-        """Get current stock quote — price, day range, and change. Use this when the user asks for a stock's price or wants to check a price before trading."""
+        """Get current stock quote — price, day range, and change. Use this when the user asks for a stock's price or wants to check a price before trading. This is the ONLY tool needed for price queries — do not also call symbol_lookup or portfolio_summary."""
         # Resolve symbol via Ghostfolio lookup
         try:
             lookup = await client.lookup_symbol(symbol)
