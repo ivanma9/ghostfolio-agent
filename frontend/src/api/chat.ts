@@ -45,10 +45,17 @@ export async function postChat(request: ChatRequest): Promise<ChatResponse> {
 }
 
 export async function fetchPortfolio(): Promise<{ totalValue: number; dailyChange: number; dailyChangePercent: number; positions: Array<{ symbol: string; name: string; quantity: number; price: number; value: number; allocation: number; currency: string }> }> {
-  const response = await fetch('/api/portfolio')
-  if (!response.ok) {
-    throw new Error(`Portfolio API error: ${response.status} ${response.statusText}`)
+  let response: Response
+  try {
+    response = await fetch('/api/portfolio')
+  } catch {
+    throw new ChatError('network')
   }
+
+  if (!response.ok) {
+    throw new ChatError('server')
+  }
+
   const data = await response.json()
   return {
     totalValue: data.total_value,
@@ -70,10 +77,7 @@ export async function fetchPaperPortfolio(): Promise<import('../types').PaperPor
   let response: Response
   try {
     response = await fetch('/api/paper-portfolio')
-  } catch (err) {
-    if (err instanceof TypeError) {
-      throw new ChatError('network')
-    }
+  } catch {
     throw new ChatError('network')
   }
 
