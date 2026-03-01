@@ -4,6 +4,9 @@ export interface ChatMessage {
   content: string
   toolCalls: string[]
   timestamp: Date
+  confidence?: string
+  verificationIssues?: string[]
+  isError?: boolean
 }
 
 export interface ChatRequest {
@@ -19,11 +22,21 @@ export interface ModelOption {
   provider: string
 }
 
+export interface Citation {
+  claim: string
+  tool_name: string
+  source_detail: string
+}
+
 export interface ChatResponse {
   response: string
   session_id: string
   tool_calls: string[]
+  tool_outputs: string[]
   confidence: string
+  citations: Citation[]
+  verification_issues: string[]
+  verification_details: Record<string, string>
 }
 
 export interface Holding {
