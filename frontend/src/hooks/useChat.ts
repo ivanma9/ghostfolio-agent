@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { postChat } from '../api/chat'
+import { postChat, ChatError } from '../api/chat'
 import type { ChatMessage } from '../types'
 
 const SESSION_KEY = 'ghostfolio-session-id'
@@ -58,6 +58,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           content: data.response,
           toolCalls: data.tool_calls ?? [],
           timestamp: new Date(),
+          confidence: data.confidence,
+          verificationIssues: data.verification_issues,
         }
 
         setMessages((prev) => [...prev, assistantMessage])
@@ -66,12 +68,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onToolCall?.(data.tool_calls)
         }
       } catch (error) {
+        const content = error instanceof ChatError
+          ? error.message
+          : 'Sorry, something went wrong. Please try again.'
         const errorMessage: ChatMessage = {
           id: uuidv4(),
           role: 'assistant',
-          content: 'Sorry, something went wrong. Please try again.',
+          content,
           toolCalls: [],
           timestamp: new Date(),
+          isError: true,
         }
         setMessages((prev) => [...prev, errorMessage])
         console.error('Chat error:', error)
