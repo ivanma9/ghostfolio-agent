@@ -20,6 +20,7 @@ from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.config import get_settings
 from ghostfolio_agent.verification.pipeline import run_verification_pipeline
+from ghostfolio_agent.alerts.engine import AlertEngine
 
 router = APIRouter()
 
@@ -27,6 +28,14 @@ router = APIRouter()
 _client: GhostfolioClient | None = None
 _checkpointer: SqliteSaver | None = None
 _agents: dict[str, object] = {}  # model_name -> agent
+_alert_engine: AlertEngine | None = None
+
+
+def _get_alert_engine() -> AlertEngine:
+    global _alert_engine
+    if _alert_engine is None:
+        _alert_engine = AlertEngine()
+    return _alert_engine
 
 
 def _get_client() -> GhostfolioClient:
@@ -183,6 +192,25 @@ async def chat(request: ChatRequest):
                 f"Just pass the user's intent directly as the action string. "
                 f"User message: {request.message}"
             )
+
+        # Run alert check
+        alert_engine = _get_alert_engine()
+        settings = get_settings()
+        finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
+        alpha_vantage_client = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
+        fmp_client = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
+
+        try:
+            alerts = await alert_engine.check_alerts(
+                _get_client(), finnhub=finnhub, alpha_vantage=alpha_vantage_client, fmp=fmp_client
+            )
+        except Exception as e:
+            logger.warning("alert_check_failed", error=str(e))
+            alerts = []
+
+        if alerts:
+            alert_block = "ALERTS:\n" + "\n".join(f"- {a}" for a in alerts)
+            content = f"{alert_block}\n\nUser message: {content}"
 
         # Checkpointer manages history per thread_id — only send the new message
         config = {"configurable": {"thread_id": request.session_id}}
