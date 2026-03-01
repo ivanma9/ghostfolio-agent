@@ -132,6 +132,9 @@ def create_morning_briefing_tool(
         market signals, macro snapshot, and action items. Use when the user asks for a morning
         briefing, daily update, or wants to know what's happening today with their portfolio."""
 
+        # Track data sources used
+        sources = ["Ghostfolio"]
+
         # Fetch portfolio holdings
         try:
             data = await client.get_portfolio_holdings()
@@ -170,6 +173,10 @@ def create_morning_briefing_tool(
 
         quotes = dict(zip(symbols, results[: len(symbols)]))
         earnings_data = dict(zip(symbols, results[len(symbols) :]))
+
+        # Track Finnhub if any quotes returned data
+        if finnhub and any(q is not None for q in quotes.values()):
+            sources.append("Finnhub")
 
         holdings_map = {}
         for h in holdings:
@@ -262,6 +269,14 @@ def create_morning_briefing_tool(
             for (sym, key), result in zip(flat_keys, flat_results):
                 enriched[sym][key] = result
 
+            # Track which enrichment sources returned data
+            if any(enriched[sym].get("news") for sym in notable_symbols):
+                if "Alpha Vantage" not in sources:
+                    sources.append("Alpha Vantage")
+            if any(enriched[sym].get("pt") for sym in notable_symbols):
+                if "FMP" not in sources:
+                    sources.append("FMP")
+
             for sym in notable_symbols:
                 sym_data = enriched[sym]
                 q = quotes.get(sym, {})
@@ -337,6 +352,11 @@ def create_morning_briefing_tool(
         # Macro snapshot
         macro = await _fetch_macro(alpha_vantage)
 
+        # Track Alpha Vantage if macro data was returned
+        if macro and any(macro.get(k) for k in ("fed_funds_rate", "cpi", "treasury_10y")):
+            if "Alpha Vantage" not in sources:
+                sources.append("Alpha Vantage")
+
         # Action items
         action_items = generate_action_items(market_signals, earnings_watch, top_movers)
 
@@ -404,6 +424,7 @@ def create_morning_briefing_tool(
         else:
             lines.append("  No action items — portfolio looks stable")
 
+        lines.append(f"[DATA_SOURCES: {', '.join(sources)}]")
         return "\n".join(lines)
 
     return morning_briefing

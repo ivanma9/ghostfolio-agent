@@ -286,20 +286,20 @@ def create_conviction_score_tool(
         for name in missing:
             lines.append(f"    {name + ':':25s} N/A")
 
-        # Data sources
-        sources = []
-        if finnhub:
-            sources.append("Finnhub")
-        if alpha_vantage:
-            sources.append("Alpha Vantage")
-        if fmp:
-            sources.append("FMP")
-        lines.append("")
-        lines.append(f"  Data Sources: {', '.join(sources)}")
         if missing:
+            lines.append("")
             lines.append(f"  Missing: {', '.join(missing)}")
-        else:
-            lines.append("  Missing: None")
+
+        # Data source attribution — only sources that actually returned data
+        data_sources = []
+        if data.get("analyst") or data.get("quote") or data.get("earnings"):
+            data_sources.append("Finnhub")
+        if data.get("news"):
+            data_sources.append("Alpha Vantage")
+        if data.get("pt_consensus"):
+            data_sources.append("FMP")
+        if data_sources:
+            lines.append(f"[DATA_SOURCES: {', '.join(data_sources)}]")
 
         return "\n".join(lines)
 

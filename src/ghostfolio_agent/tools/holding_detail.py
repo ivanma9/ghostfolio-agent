@@ -257,6 +257,7 @@ def create_holding_detail_tool(
         ])
 
         # --- Parallel enrichment fetches ---
+        sources = ["Ghostfolio"]
         enrichment_tasks = []
         task_labels = []
 
@@ -286,6 +287,14 @@ def create_holding_detail_tool(
             lines.extend(_format_price_targets(enrichment.get("pt_consensus"), enrichment.get("pt_summary")))
             lines.extend(_format_smart_summary(market_price, enrichment))
 
+            if enrichment.get("earnings") or enrichment.get("analyst"):
+                sources.append("Finnhub")
+            if enrichment.get("news"):
+                sources.append("Alpha Vantage")
+            if enrichment.get("pt_consensus") or enrichment.get("pt_summary"):
+                sources.append("FMP")
+
+        lines.append(f"[DATA_SOURCES: {', '.join(sources)}]")
         return "\n".join(lines)
 
     return holding_detail

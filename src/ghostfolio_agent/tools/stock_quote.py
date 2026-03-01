@@ -77,6 +77,7 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
                         f"  Day Range:  ${low:,.2f} – ${high:,.2f}",
                         f"  Open:       ${open_price:,.2f}",
                         f"  Prev Close: ${prev_close:,.2f}",
+                        f"[DATA_SOURCES: Ghostfolio, Finnhub]",
                     ]
                     return "\n".join(lines)
             except Exception as e:
@@ -84,7 +85,7 @@ def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | N
 
         # Fallback to Ghostfolio price only
         if ghostfolio_price:
-            return f"{resolved_symbol} — {name}\n  Price: ${ghostfolio_price:,.2f}"
+            return f"{resolved_symbol} — {name}\n  Price: ${ghostfolio_price:,.2f}\n[DATA_SOURCES: Ghostfolio]"
 
         return f"Could not retrieve price for {resolved_symbol}."
 
