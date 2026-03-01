@@ -3,7 +3,7 @@ import os
 import sqlite3
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
@@ -111,71 +111,76 @@ async def list_models():
 @router.get("/api/paper-portfolio", response_model=PaperPortfolioResponse)
 async def get_paper_portfolio():
     """Return paper portfolio with live prices — no LLM call needed."""
-    portfolio = load_portfolio()
-    cash = portfolio.get("cash", _STARTING_CASH)
-    positions_raw = portfolio.get("positions", {})
+    try:
+        portfolio = load_portfolio()
+        cash = portfolio.get("cash", _STARTING_CASH)
+        positions_raw = portfolio.get("positions", {})
 
-    client = _get_client()
-    positions: list[PaperPositionResponse] = []
-    total_position_value = 0.0
+        client = _get_client()
+        positions: list[PaperPositionResponse] = []
+        total_position_value = 0.0
 
-    if positions_raw:
-        # Fetch live prices in parallel
-        async def _price(sym: str, pos: dict) -> PaperPositionResponse:
-            avg_cost = pos.get("avg_cost", 0)
-            qty = pos.get("quantity", 0)
-            current_price = avg_cost  # fallback
-            try:
-                lookup = await client.lookup_symbol(sym)
-                items = lookup.get("items", [])
-                if items:
-                    ds = items[0].get("dataSource", "YAHOO")
-                    sym_data = await client.get_symbol(ds, sym)
-                    current_price = sym_data.get("marketPrice", avg_cost) or avg_cost
-            except Exception:
-                pass
-            value = qty * current_price
-            cost = qty * avg_cost
-            pnl = value - cost
-            pnl_pct = (pnl / cost * 100) if cost else 0
-            return PaperPositionResponse(
-                symbol=sym,
-                quantity=qty,
-                avg_cost=avg_cost,
-                current_price=current_price,
-                value=value,
-                pnl=pnl,
-                pnl_percent=pnl_pct,
-                allocation=0,  # filled below
+        if positions_raw:
+            # Fetch live prices in parallel
+            async def _price(sym: str, pos: dict) -> PaperPositionResponse:
+                avg_cost = pos.get("avg_cost", 0)
+                qty = pos.get("quantity", 0)
+                current_price = avg_cost  # fallback
+                try:
+                    lookup = await client.lookup_symbol(sym)
+                    items = lookup.get("items", [])
+                    if items:
+                        ds = items[0].get("dataSource", "YAHOO")
+                        sym_data = await client.get_symbol(ds, sym)
+                        current_price = sym_data.get("marketPrice", avg_cost) or avg_cost
+                except Exception:
+                    pass
+                value = qty * current_price
+                cost = qty * avg_cost
+                pnl = value - cost
+                pnl_pct = (pnl / cost * 100) if cost else 0
+                return PaperPositionResponse(
+                    symbol=sym,
+                    quantity=qty,
+                    avg_cost=avg_cost,
+                    current_price=current_price,
+                    value=value,
+                    pnl=pnl,
+                    pnl_percent=pnl_pct,
+                    allocation=0,  # filled below
+                )
+
+            results = await asyncio.gather(
+                *[_price(sym, pos) for sym, pos in positions_raw.items()]
             )
+            positions = list(results)
+            total_position_value = sum(p.value for p in positions)
 
-        results = await asyncio.gather(
-            *[_price(sym, pos) for sym, pos in positions_raw.items()]
-        )
-        positions = list(results)
-        total_position_value = sum(p.value for p in positions)
+            # Compute allocations
+            total_value = cash + total_position_value
+            if total_value > 0:
+                for p in positions:
+                    p.allocation = round(p.value / total_value * 100, 1)
 
-        # Compute allocations
         total_value = cash + total_position_value
-        if total_value > 0:
-            for p in positions:
-                p.allocation = round(p.value / total_value * 100, 1)
+        total_pnl = total_value - _STARTING_CASH
+        total_pnl_pct = (total_pnl / _STARTING_CASH * 100)
 
-    total_value = cash + total_position_value
-    total_pnl = total_value - _STARTING_CASH
-    total_pnl_pct = (total_pnl / _STARTING_CASH * 100)
-
-    return PaperPortfolioResponse(
-        cash=cash,
-        total_value=total_value,
-        total_pnl=total_pnl,
-        total_pnl_percent=total_pnl_pct,
-        positions=positions,
-    )
+        return PaperPortfolioResponse(
+            cash=cash,
+            total_value=total_value,
+            total_pnl=total_pnl,
+            total_pnl_percent=total_pnl_pct,
+            positions=positions,
+        )
+    except Exception as e:
+        logger.error("paper_portfolio_endpoint_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to load paper portfolio.")
 
 
 @router.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
+    logger.info("chat_request", session_id=request.session_id, model=request.model)
     try:
         model = request.model or DEFAULT_MODEL
         agent = _get_agent(model)
@@ -290,11 +295,4 @@ async def chat(request: ChatRequest):
         )
     except Exception as e:
         logger.error("chat_endpoint_failed", error=str(e), session_id=request.session_id)
-        return ChatResponse(
-            response="Sorry, something went wrong processing your request. Please try again.",
-            session_id=request.session_id,
-            tool_calls=[],
-            tool_outputs=[],
-            confidence="low",
-            citations=[],
-        )
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
