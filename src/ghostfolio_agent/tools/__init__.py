@@ -12,6 +12,7 @@ from ghostfolio_agent.tools.holding_detail import create_holding_detail_tool
 from ghostfolio_agent.tools.activity_log import create_activity_log_tool
 from ghostfolio_agent.tools.stock_quote import create_stock_quote_tool
 from ghostfolio_agent.tools.conviction_score import create_conviction_score_tool
+from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
 
 
 def create_tools(
@@ -32,5 +33,6 @@ def create_tools(
         create_activity_log_tool(client),
         create_stock_quote_tool(client, finnhub=finnhub),
         create_conviction_score_tool(finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp),
+        create_morning_briefing_tool(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp),
     ]
     return tools
