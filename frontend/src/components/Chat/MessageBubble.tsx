@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatMessage } from '../../types'
 import RichCard from './RichCard'
+import VerificationBanner from './VerificationBanner'
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -101,7 +102,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           className={`px-4 py-3 shadow-sm ${
             isUser
               ? 'bg-gradient-to-br from-indigo-500 to-violet-500 text-white rounded-2xl rounded-br-sm'
-              : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
+              : message.isError
+                ? 'bg-red-50 border border-red-200 text-red-700 rounded-2xl rounded-bl-sm'
+                : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
           }`}
         >
           {isUser ? (
@@ -115,6 +118,14 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           {/* Rich card rendered below markdown for assistant messages */}
           {hasRichCard && (
             <RichCard toolCalls={message.toolCalls} content={message.content} />
+          )}
+
+          {/* Verification warnings */}
+          {!isUser && message.verificationIssues && message.verificationIssues.length > 0 && (
+            <VerificationBanner
+              issues={message.verificationIssues}
+              confidence={message.confidence}
+            />
           )}
         </div>
 
