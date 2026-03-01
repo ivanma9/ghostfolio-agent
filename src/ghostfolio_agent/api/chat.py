@@ -296,8 +296,16 @@ async def chat(request: ChatRequest):
                 citations=[],
             )
 
-        # Extract response and tool calls from messages
-        response_messages = result.get("messages", [])
+        # Extract response and tool calls from THIS turn only
+        # (result contains full history when using checkpointer)
+        all_messages = result.get("messages", [])
+        # Find the last HumanMessage index — everything after it is this turn's response
+        last_human_idx = -1
+        for i, msg in enumerate(all_messages):
+            if isinstance(msg, HumanMessage):
+                last_human_idx = i
+        response_messages = all_messages[last_human_idx + 1:] if last_human_idx >= 0 else all_messages
+
         ai_response = ""
         tool_calls_made = []
         tool_outputs = []
