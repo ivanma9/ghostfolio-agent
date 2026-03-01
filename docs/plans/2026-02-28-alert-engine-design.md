@@ -116,13 +116,9 @@ if alerts:
     # so the agent naturally surfaces them
 ```
 
-**Modified file:** `src/ghostfolio_agent/agent/graph.py`
-
-The `AlertEngine` instance is created once in the app lifespan (singleton) so cooldown state persists across requests. Passed into the chat handler.
-
 **Modified file:** `src/ghostfolio_agent/main.py`
 
-Instantiate `AlertEngine` at app startup, pass to chat router.
+Instantiate `AlertEngine` singleton at app startup, pass to chat router. Cooldown state persists across requests for the app's lifetime.
 
 ### Rate Limit Awareness
 
@@ -161,10 +157,9 @@ The agent receives these and naturally mentions them at the start of its respons
 - `src/ghostfolio_agent/alerts/engine.py`
 - `src/ghostfolio_agent/alerts/__init__.py`
 
-### Modified files (3):
+### Modified files (2):
 - `src/ghostfolio_agent/main.py` — instantiate AlertEngine singleton
 - `src/ghostfolio_agent/chat.py` — run alert check before agent invocation, inject into context
-- `src/ghostfolio_agent/agent/graph.py` — pass alert engine through or accept alert context
 
 ### Test file (1):
 - `tests/unit/test_alert_engine.py`
