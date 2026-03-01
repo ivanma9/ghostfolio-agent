@@ -60,6 +60,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           timestamp: new Date(),
           confidence: data.confidence,
           verificationIssues: data.verification_issues,
+          dataSources: data.data_sources ?? [],
         }
 
         setMessages((prev) => [...prev, assistantMessage])

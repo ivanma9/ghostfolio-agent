@@ -7,6 +7,7 @@ export interface ChatMessage {
   confidence?: string
   verificationIssues?: string[]
   isError?: boolean
+  dataSources?: string[]
 }
 
 export interface ChatRequest {
@@ -37,6 +38,7 @@ export interface ChatResponse {
   citations: Citation[]
   verification_issues: string[]
   verification_details: Record<string, string>
+  data_sources: string[]
 }
 
 export interface Holding {

@@ -4,6 +4,15 @@ import type { ChatMessage } from '../../types'
 import RichCard from './RichCard'
 import VerificationBanner from './VerificationBanner'
 
+const SOURCE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  Finnhub:          { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-400' },
+  'Alpha Vantage':  { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-400' },
+  FMP:              { bg: 'bg-purple-50',  text: 'text-purple-700', dot: 'bg-purple-400' },
+  Ghostfolio:       { bg: 'bg-indigo-50',  text: 'text-indigo-700', dot: 'bg-indigo-400' },
+}
+
+const DEFAULT_SOURCE_COLOR = { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-400' }
+
 interface MessageBubbleProps {
   message: ChatMessage
 }
@@ -76,6 +85,27 @@ function stripRawData(content: string, toolCalls: string[]): string {
   return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+function DataSourceBadges({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
+      <span className="text-xs text-gray-400">Sources</span>
+      {sources.map((src) => {
+        const colors = SOURCE_COLORS[src] ?? DEFAULT_SOURCE_COLOR
+        return (
+          <span
+            key={src}
+            className={`inline-flex items-center gap-1 text-xs ${colors.bg} ${colors.text} px-2 py-0.5 rounded-full font-medium`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+            {src}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const hasRichCard = !isUser && message.toolCalls.length > 0
@@ -126,6 +156,11 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
               issues={message.verificationIssues}
               confidence={message.confidence}
             />
+          )}
+
+          {/* Data source attribution */}
+          {!isUser && message.dataSources && message.dataSources.length > 0 && (
+            <DataSourceBadges sources={message.dataSources} />
           )}
         </div>
 
