@@ -47,6 +47,11 @@ class TestGenerateActionItems:
         items = generate_action_items([], [], movers)
         assert any("NVDA" in item and "5.2%" in item for item in items)
 
+    def test_big_mover_up(self):
+        movers = [{"symbol": "TSLA", "name": "Tesla", "daily_change": 6.1, "direction": "up"}]
+        items = generate_action_items([], [], movers)
+        assert any("TSLA" in item and "6.1%" in item for item in items)
+
     def test_no_flags_no_items(self):
         items = generate_action_items([], [], [])
         assert items == []
@@ -171,13 +176,17 @@ def fmp_client():
 
 
 class TestMorningBriefingTool:
+    @pytest.fixture(autouse=True)
+    def reset_macro_cache(self):
+        from ghostfolio_agent.tools.morning_briefing import _macro_cache
+        _macro_cache["data"] = None
+        _macro_cache["fetched_at"] = None
+        yield
+
     @pytest.mark.asyncio
     async def test_full_briefing(self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client):
         """Full briefing includes all 6 sections."""
-        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool, _macro_cache
-
-        _macro_cache["data"] = None
-        _macro_cache["fetched_at"] = None
+        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
 
         tool = create_morning_briefing_tool(
             ghostfolio_client, finnhub=finnhub_client, alpha_vantage=alpha_vantage_client, fmp=fmp_client
@@ -219,10 +228,7 @@ class TestMorningBriefingTool:
     @pytest.mark.asyncio
     async def test_macro_cache_used_on_second_call(self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client):
         """Second briefing call reuses cached macro data."""
-        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool, _macro_cache
-
-        _macro_cache["data"] = None
-        _macro_cache["fetched_at"] = None
+        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
 
         tool = create_morning_briefing_tool(
             ghostfolio_client, finnhub=finnhub_client, alpha_vantage=alpha_vantage_client, fmp=fmp_client

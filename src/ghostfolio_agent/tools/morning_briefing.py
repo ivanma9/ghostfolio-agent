@@ -232,6 +232,7 @@ def create_morning_briefing_tool(
                             "days_until": days_until,
                         })
                         earnings_flagged_symbols.add(sym)
+                        break  # only flag first upcoming earnings per symbol
                 except (ValueError, TypeError):
                     continue
 
