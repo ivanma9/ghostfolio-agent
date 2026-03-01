@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 import aiosqlite
 import structlog
@@ -101,6 +102,29 @@ def _extract_citations(messages: list) -> list[Citation]:
                 )
             )
     return citations
+
+
+_DATA_SOURCES_RE = re.compile(r"\[DATA_SOURCES:\s*(.+)\]")
+
+
+def _extract_data_sources(tool_outputs: list[str]) -> list[str]:
+    """Extract and deduplicate data source names from tool output metadata lines."""
+    seen: set[str] = set()
+    for output in tool_outputs:
+        for line in output.splitlines():
+            m = _DATA_SOURCES_RE.search(line)
+            if m:
+                for src in m.group(1).split(","):
+                    seen.add(src.strip())
+    return sorted(seen)
+
+
+def _strip_data_sources_line(output: str) -> str:
+    """Remove the [DATA_SOURCES: ...] metadata line from a tool output string."""
+    return "\n".join(
+        line for line in output.splitlines()
+        if not _DATA_SOURCES_RE.search(line)
+    )
 
 
 @router.get("/api/models")
@@ -283,6 +307,7 @@ async def chat(request: ChatRequest):
                 tool_outputs=[],
                 confidence="low",
                 citations=[],
+                data_sources=[],
             )
         except GraphInterrupt as gi:
             # Human-in-the-loop: activity_log interrupted for confirmation
@@ -294,6 +319,7 @@ async def chat(request: ChatRequest):
                 tool_outputs=[],
                 confidence="high",
                 citations=[],
+                data_sources=[],
             )
 
         # Extract response and tool calls from THIS turn only
@@ -316,6 +342,11 @@ async def chat(request: ChatRequest):
                 tool_calls_made.append(msg.name)
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 tool_outputs.append(content)
+
+        # Extract data sources before stripping metadata
+        data_sources = _extract_data_sources(tool_outputs)
+        # Strip metadata lines so they don't appear in LLM context or verification
+        tool_outputs = [_strip_data_sources_line(o) for o in tool_outputs]
 
         # Build citations from tool call results
         citations = _extract_citations(response_messages)
@@ -348,6 +379,7 @@ async def chat(request: ChatRequest):
             citations=citations,
             verification_issues=pipeline_result.all_issues,
             verification_details=verification_details,
+            data_sources=data_sources,
         )
     except Exception as e:
         logger.error("chat_endpoint_failed", error=str(e), session_id=request.session_id)
