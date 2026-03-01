@@ -47,6 +47,23 @@ class HealthResponse(BaseModel):
     status: str = "ok"
 
 
+class PortfolioPositionResponse(BaseModel):
+    symbol: str
+    name: str
+    quantity: float
+    price: float
+    value: float
+    allocation: float
+    currency: str
+
+
+class PortfolioResponse(BaseModel):
+    total_value: float
+    daily_change: float
+    daily_change_percent: float
+    positions: list[PortfolioPositionResponse] = Field(default_factory=list)
+
+
 class PaperPositionResponse(BaseModel):
     symbol: str
     quantity: float

@@ -9,7 +9,7 @@ from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse
+from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse, PortfolioPositionResponse, PortfolioResponse
 from ghostfolio_agent.tools.paper_trade import load_portfolio, _STARTING_CASH
 
 logger = structlog.get_logger()
@@ -106,6 +106,53 @@ def _extract_citations(messages: list) -> list[Citation]:
 async def list_models():
     """Return available models for the frontend selector."""
     return {"models": AVAILABLE_MODELS, "default": DEFAULT_MODEL}
+
+
+@router.get("/api/portfolio", response_model=PortfolioResponse)
+async def get_portfolio():
+    """Return real portfolio holdings with daily change — no LLM call needed."""
+    try:
+        client = _get_client()
+        holdings_data, perf_data = await asyncio.gather(
+            client.get_portfolio_holdings(),
+            client.get_portfolio_performance("1d"),
+        )
+
+        raw_holdings = holdings_data.get("holdings", {})
+        if isinstance(raw_holdings, dict):
+            holdings = list(raw_holdings.values())
+        else:
+            holdings = list(raw_holdings)
+
+        total_value = 0.0
+        positions: list[PortfolioPositionResponse] = []
+        for h in holdings:
+            value = h.get("valueInBaseCurrency", 0) or 0
+            total_value += value
+            positions.append(PortfolioPositionResponse(
+                symbol=h.get("symbol", "?"),
+                name=h.get("name") or h.get("symbol", "?"),
+                quantity=h.get("quantity", 0) or 0,
+                price=h.get("marketPrice", 0) or 0,
+                value=value,
+                allocation=round((h.get("allocationInPercentage", 0) or 0) * 100, 1),
+                currency=h.get("currency", "USD"),
+            ))
+
+        # Extract daily change from performance data
+        perf = perf_data.get("chart", [{}])
+        daily_change = perf_data.get("netPerformance", 0) or 0
+        daily_change_pct = (perf_data.get("netPerformancePercentage", 0) or 0) * 100
+
+        return PortfolioResponse(
+            total_value=total_value,
+            daily_change=daily_change,
+            daily_change_percent=daily_change_pct,
+            positions=positions,
+        )
+    except Exception as e:
+        logger.error("portfolio_endpoint_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to load portfolio.")
 
 
 @router.get("/api/paper-portfolio", response_model=PaperPortfolioResponse)
