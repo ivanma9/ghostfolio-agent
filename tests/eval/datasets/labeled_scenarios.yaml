@@ -177,7 +177,7 @@
   description: Price query by company name should call stock_quote only, resolving the name internally
 
 - id: tc_053_price_query_whats_the_price
-  input: What's the price of MSFT?
+  input: "What's the price of MSFT?"
   expected_tools: [stock_quote]
   unexpected_tools: [symbol_lookup, portfolio_summary]
   expected_tool_output_contains: [MSFT, "$"]
@@ -187,7 +187,7 @@
   complexity: single_tool
   difficulty: straightforward
   stage: labeled_scenario
-  description: "What's the price" phrasing should route to stock_quote only
+  description: Price phrasing should route to stock_quote only
 
 - id: tc_054_price_query_quote
   input: Give me a quote for TSLA
@@ -200,7 +200,7 @@
   complexity: single_tool
   difficulty: straightforward
   stage: labeled_scenario
-  description: "Quote for X" phrasing should route to stock_quote only
+  description: Quote phrasing should route to stock_quote only
 
 # ── Ambiguous Routing ─────────────────────────────────────────────────────────
 
