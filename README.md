@@ -9,7 +9,7 @@ AI-powered portfolio assistant for [Ghostfolio](https://ghostfol.io). Chat with 
 - **Portfolio sidebar**: Live portfolio value, allocation donut chart, top holdings
 - **Paper trading simulator**: $100K virtual cash, persistent across restarts
 
-## Quick Start
+## Local Development
 
 ### 1. Start Ghostfolio
 
@@ -23,6 +23,7 @@ docker compose -f docker-compose.dev.yml up -d
 ```bash
 cp .env.example .env
 # Fill in: ANTHROPIC_API_KEY, GHOSTFOLIO_ACCESS_TOKEN
+# Optional: FINNHUB_API_KEY, ALPHA_VANTAGE_API_KEY, FMP_API_KEY
 ```
 
 ### 3. Start the agent
@@ -41,6 +42,27 @@ npm run dev
 # Open http://localhost:5173
 ```
 
+## Production
+
+### Railway
+
+Already configured via `railway.json` + `Dockerfile`. The multi-stage Docker build compiles the React frontend and bundles it as static files served by FastAPI.
+
+- Healthcheck: `/api/health`
+- Restart policy: on failure (max 10 retries)
+- Start command: `uv run uvicorn ghostfolio_agent.main:app --host 0.0.0.0 --port ${PORT:-8000}`
+
+Set these environment variables in the Railway dashboard: `ANTHROPIC_API_KEY`, `GHOSTFOLIO_BASE_URL`, `GHOSTFOLIO_ACCESS_TOKEN`, and optionally `FINNHUB_API_KEY`, `ALPHA_VANTAGE_API_KEY`, `FMP_API_KEY`, `LANGSMITH_API_KEY`.
+
+### Self-hosted Docker
+
+```bash
+# Full stack: Ghostfolio + Postgres + Redis + Agent
+docker compose up -d
+```
+
+Requires env vars in `.env` or shell: `ANTHROPIC_API_KEY`, `GHOSTFOLIO_ACCESS_TOKEN`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `ACCESS_TOKEN_SALT`, `JWT_SECRET_KEY`, `SECRET`.
+
 ## Tools
 
 | Tool | Description | Example |
@@ -52,16 +74,16 @@ npm run dev
 | `risk_analysis` | Concentration, sector, currency risk | "Analyze my portfolio risk" |
 | `paper_trade` | Virtual trading with $100K | "Paper buy 10 AAPL" |
 
+## Tests
+
+```bash
+uv run pytest tests/unit/ -v              # unit tests
+uv run python tests/eval/run_evals.py     # evals (agent must be running on port 8000)
+```
+
 ## Evals
 
 Golden-set evaluation tests verify all 6 tools work correctly. Tests are located at [`tests/eval/datasets/mvp_test_cases.json`](tests/eval/datasets/mvp_test_cases.json).
-
-### Running evals
-
-```bash
-# Make sure the agent is running on port 8000 first
-uv run python tests/eval/run_evals.py
-```
 
 ### Test cases (8 total)
 
