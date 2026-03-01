@@ -1,16 +1,44 @@
 import type { ChatRequest, ChatResponse } from '../types'
 
+export type ChatErrorType = 'timeout' | 'network' | 'server'
+
+const ERROR_MESSAGES: Record<ChatErrorType, string> = {
+  timeout: 'That took too long. Try a simpler question or try again.',
+  network: "Couldn't reach the server. Check your connection and try again.",
+  server: 'Our servers are having trouble. Please try again in a moment.',
+}
+
+export class ChatError extends Error {
+  type: ChatErrorType
+  constructor(type: ChatErrorType) {
+    super(ERROR_MESSAGES[type])
+    this.type = type
+  }
+}
+
 export async function postChat(request: ChatRequest): Promise<ChatResponse> {
-  const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  })
+  let response: Response
+  try {
+    response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    })
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new ChatError('network')
+    }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ChatError('timeout')
+    }
+    throw new ChatError('network')
+  }
 
   if (!response.ok) {
-    throw new Error(`Chat API error: ${response.status} ${response.statusText}`)
+    if (response.status === 408) {
+      throw new ChatError('timeout')
+    }
+    throw new ChatError('server')
   }
 
   return response.json() as Promise<ChatResponse>
@@ -39,12 +67,21 @@ export async function fetchPortfolio(): Promise<{ totalValue: number; dailyChang
 }
 
 export async function fetchPaperPortfolio(): Promise<import('../types').PaperPortfolio> {
-  const response = await fetch('/api/paper-portfolio')
-  if (!response.ok) {
-    throw new Error(`Paper portfolio API error: ${response.status} ${response.statusText}`)
+  let response: Response
+  try {
+    response = await fetch('/api/paper-portfolio')
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new ChatError('network')
+    }
+    throw new ChatError('network')
   }
+
+  if (!response.ok) {
+    throw new ChatError('server')
+  }
+
   const data = await response.json()
-  // Map snake_case backend to camelCase frontend
   return {
     cash: data.cash,
     totalValue: data.total_value,
