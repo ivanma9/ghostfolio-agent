@@ -9,6 +9,8 @@ interface SidebarProps {
   dailyChange: { value: number; percent: number };
   isLoading: boolean;
   isPaperTrading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 function ChartIcon() {
@@ -29,7 +31,7 @@ function ChartIcon() {
   );
 }
 
-export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false }: SidebarProps) {
+export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false, error, onRetry }: SidebarProps) {
   return (
     <aside className="w-72 h-full border-r border-gray-100 bg-white overflow-y-auto flex-shrink-0">
       <div className="p-5 space-y-6">
@@ -62,6 +64,21 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPa
             isPaperTrading={isPaperTrading}
           />
         </section>
+
+        {/* Error state */}
+        {error && holdings.length === 0 && !isLoading && (
+          <section className="text-center py-4">
+            <p className="text-sm text-red-600">{error}</p>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="mt-2 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+              >
+                Retry
+              </button>
+            )}
+          </section>
+        )}
 
         {/* Allocation Chart */}
         <section>

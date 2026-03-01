@@ -38,6 +38,8 @@ function App() {
           dailyChange={sidebar.dailyChange}
           isLoading={sidebar.isLoading}
           isPaperTrading={isPaperTrading}
+          error={sidebar.error}
+          onRetry={sidebar.refresh}
         />
       </div>
 
