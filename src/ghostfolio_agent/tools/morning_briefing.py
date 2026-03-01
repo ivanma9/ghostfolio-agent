@@ -6,6 +6,7 @@ import structlog
 from datetime import date
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.tools.cache import ttl_cache
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
@@ -130,6 +131,7 @@ def create_morning_briefing_tool(
     fmp: FMPClient | None = None,
 ):
     @tool
+    @ttl_cache(ttl=1800)
     async def morning_briefing() -> str:
         """Get a daily morning briefing with portfolio overview, top movers, upcoming earnings,
         market signals, macro snapshot, and action items. Use when the user asks for a morning

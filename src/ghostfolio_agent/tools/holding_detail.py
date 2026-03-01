@@ -6,6 +6,7 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.tools.cache import ttl_cache
 from ghostfolio_agent.tools.conviction_score import (
     compute_analyst_score,
     compute_price_target_score,
@@ -206,6 +207,7 @@ def create_holding_detail_tool(
     fmp: FMPClient | None = None,
 ):
     @tool
+    @ttl_cache(ttl=300)
     async def holding_detail(symbol: str) -> str:
         """Get a deep dive into a specific portfolio holding — cost basis, P&L, performance,
         and transaction history. When 3rd-party clients are configured, also includes external

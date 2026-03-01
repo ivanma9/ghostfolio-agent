@@ -1,8 +1,6 @@
 name: Golden-Set Evals
 
 on:
-  schedule:
-    - cron: '0 7 */2 * *'  # Every 2 days at 7am UTC
   workflow_dispatch:
 
 jobs:

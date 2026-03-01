@@ -3,12 +3,14 @@ import asyncio
 import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.tools.cache import ttl_cache
 
 logger = structlog.get_logger()
 
 
 def create_risk_analysis_tool(client: GhostfolioClient):
     @tool
+    @ttl_cache(ttl=60)
     async def risk_analysis() -> str:
         """Analyze portfolio risk including concentration risk, sector breakdown, and currency exposure. Use this when the user asks about risk, diversification, sector allocation, or currency exposure."""
         try:

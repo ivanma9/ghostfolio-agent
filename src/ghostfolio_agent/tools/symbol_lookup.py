@@ -1,12 +1,14 @@
 import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.tools.cache import ttl_cache
 
 logger = structlog.get_logger()
 
 
 def create_symbol_lookup_tool(client: GhostfolioClient):
     @tool
+    @ttl_cache(ttl=3600)
     async def symbol_lookup(query: str) -> str:
         """Look up a stock, ETF, or cryptocurrency by name or ticker symbol. Use this when the user asks about a specific security, wants to know what a ticker is, or needs current price information."""
         try:

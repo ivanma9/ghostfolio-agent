@@ -1,12 +1,14 @@
 import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.tools.cache import ttl_cache
 
 logger = structlog.get_logger()
 
 
 def create_transaction_history_tool(client: GhostfolioClient):
     @tool
+    @ttl_cache(ttl=120)
     async def transaction_history(symbol: str = "") -> str:
         """Get the transaction history showing all buy/sell/dividend activity. Optionally filter by symbol. Use this when the user asks about their trades, transactions, purchases, or activity."""
         try:

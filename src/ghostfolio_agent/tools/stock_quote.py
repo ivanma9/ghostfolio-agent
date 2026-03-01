@@ -1,10 +1,12 @@
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
+from ghostfolio_agent.tools.cache import ttl_cache
 
 
 def create_stock_quote_tool(client: GhostfolioClient, finnhub: FinnhubClient | None = None):
     @tool
+    @ttl_cache(ttl=60)
     async def stock_quote(symbol: str) -> str:
         """Get current stock quote — price, day range, and change. Use this when the user asks for a stock's price or wants to check a price before trading."""
         # Resolve symbol via Ghostfolio lookup

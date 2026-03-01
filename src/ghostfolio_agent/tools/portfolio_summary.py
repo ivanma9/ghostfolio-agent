@@ -1,12 +1,14 @@
 import structlog
 from langchain_core.tools import tool
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+from ghostfolio_agent.tools.cache import ttl_cache
 
 logger = structlog.get_logger()
 
 
 def create_portfolio_summary_tool(client: GhostfolioClient):
     @tool
+    @ttl_cache(ttl=30)
     async def portfolio_summary() -> str:
         """Get a summary of the user's portfolio including all holdings, their current values, allocations, and total portfolio value. Use this when the user asks about their portfolio, holdings, positions, or allocation."""
         try:

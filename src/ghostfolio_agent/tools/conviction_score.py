@@ -3,6 +3,7 @@
 import asyncio
 import structlog
 from langchain_core.tools import tool
+from ghostfolio_agent.tools.cache import ttl_cache
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
@@ -203,6 +204,7 @@ def create_conviction_score_tool(
     fmp: FMPClient | None = None,
 ):
     @tool
+    @ttl_cache(ttl=300)
     async def conviction_score(symbol: str) -> str:
         """Get a conviction score (0-100) for a stock symbol based on analyst consensus,
         price target upside, news sentiment, and earnings proximity. Use when the user
