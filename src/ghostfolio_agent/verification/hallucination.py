@@ -1,7 +1,11 @@
 import re
 from dataclasses import dataclass, field
 
+import structlog
+
 # Common English words that look like ticker symbols
+
+logger = structlog.get_logger()
 _COMMON_WORDS = frozenset({
     "I", "A", "THE", "TO", "IN", "IS", "IT", "OF", "ON", "AT", "BY", "OR",
     "AN", "AS", "IF", "SO", "UP", "DO", "GO", "NO", "AM", "BE", "HE", "ME",

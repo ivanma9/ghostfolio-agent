@@ -1,7 +1,11 @@
 import re
 from dataclasses import dataclass, field
 
+import structlog
+
 # Dollar amounts should have exactly 2 decimal places: $1,234.56
+
+logger = structlog.get_logger()
 _DOLLAR_FORMAT_RE = re.compile(r'\$[0-9,]+\.(\d+)')
 
 # Percentages should have at least 1 decimal place: 12.3%

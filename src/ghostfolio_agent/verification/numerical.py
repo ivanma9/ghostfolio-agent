@@ -1,7 +1,11 @@
 import re
 from dataclasses import dataclass, field
 
+import structlog
+
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
+
+logger = structlog.get_logger()
 
 
 @dataclass

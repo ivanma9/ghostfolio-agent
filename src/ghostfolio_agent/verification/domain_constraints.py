@@ -1,7 +1,11 @@
 import re
 from dataclasses import dataclass, field
 
+import structlog
+
 # Investment advice patterns (case-insensitive)
+
+logger = structlog.get_logger()
 _ADVICE_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
