@@ -12,7 +12,7 @@ function App() {
   // Guests always paper trade; regular users default to false
   const [isPaperTrading, setIsPaperTrading] = useState(auth.isGuest)
 
-  const sidebar = useSidebar(isPaperTrading, auth.isGuest)
+  const sidebar = useSidebar(isPaperTrading, auth.isGuest, auth.isAuthenticated)
 
   const handleToolCall = useCallback(
     (toolCalls: string[]) => {

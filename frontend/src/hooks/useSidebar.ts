@@ -16,7 +16,7 @@ interface UseSidebarReturn {
   refresh: () => Promise<void>
 }
 
-export function useSidebar(isPaperTrading: boolean = false, isGuest: boolean = false): UseSidebarReturn {
+export function useSidebar(isPaperTrading: boolean = false, isGuest: boolean = false, isAuthenticated: boolean = true): UseSidebarReturn {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [portfolioValue, setPortfolioValue] = useState(0)
   const [dailyChange, setDailyChange] = useState<DailyChange>({ value: 0, percent: 0 })
@@ -24,8 +24,8 @@ export function useSidebar(isPaperTrading: boolean = false, isGuest: boolean = f
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
-    // Guest without paper trading has no portfolio to show
-    if (isGuest && !isPaperTrading) {
+    // Not authenticated or guest without paper trading — nothing to fetch
+    if (!isAuthenticated || (isGuest && !isPaperTrading)) {
       setHoldings([])
       setPortfolioValue(0)
       setDailyChange({ value: 0, percent: 0 })
@@ -75,7 +75,7 @@ export function useSidebar(isPaperTrading: boolean = false, isGuest: boolean = f
     } finally {
       setIsLoading(false)
     }
-  }, [isPaperTrading, isGuest])
+  }, [isPaperTrading, isGuest, isAuthenticated])
 
   useEffect(() => {
     refresh()
