@@ -19,11 +19,13 @@ export function useAuth() {
     }
   })
 
-  const login = useCallback(async (ghostfolioToken: string) => {
+  const login = useCallback(async (ghostfolioToken: string, ghostfolioUrl?: string) => {
+    const body: Record<string, string> = { ghostfolio_token: ghostfolioToken }
+    if (ghostfolioUrl) body.ghostfolio_url = ghostfolioUrl
     const resp = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ghostfolio_token: ghostfolioToken }),
+      body: JSON.stringify(body),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: 'Login failed' }))

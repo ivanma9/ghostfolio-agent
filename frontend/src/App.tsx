@@ -43,7 +43,7 @@ function App() {
   if (!auth.isAuthenticated) {
     return (
       <LoginScreen
-        onLogin={async (token) => { await auth.login(token) }}
+        onLogin={async (token, url) => { await auth.login(token, url) }}
         onGuestLogin={async () => { await auth.loginAsGuest() }}
       />
     )

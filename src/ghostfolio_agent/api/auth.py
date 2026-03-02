@@ -24,24 +24,24 @@ async def _get_auth_db() -> AuthDB:
     return _auth_db
 
 
-async def _validate_ghostfolio_token(token: str) -> bool:
+async def _validate_ghostfolio_token(token: str, base_url: str | None = None) -> bool:
     """Validate a Ghostfolio token — supports both security tokens and Bearer JWTs.
 
     Security tokens are short strings exchanged via POST /auth/anonymous.
     Bearer JWTs (start with 'eyJ') are used directly as Authorization headers.
 
-    If the token matches the env-configured GHOSTFOLIO_ACCESS_TOKEN, it is
-    trusted without a round-trip to Ghostfolio (avoids internal networking issues).
+    If the token matches the env-configured GHOSTFOLIO_ACCESS_TOKEN and no custom
+    base_url is provided, it is trusted without a round-trip to Ghostfolio.
     """
     settings = get_settings()
 
-    # Fast path: admin token is pre-trusted (it's the same one the system uses)
-    if token == settings.ghostfolio_access_token:
+    # Fast path: admin token is pre-trusted only when using the default instance
+    if not base_url and token == settings.ghostfolio_access_token:
         logger.info("ghostfolio_token_trusted", reason="matches_env_token")
         return True
 
-    # Use public URL for validation (internal Railway URLs reject Bearer auth)
-    base_url = settings.ghostfolio_public_url or settings.ghostfolio_base_url
+    # Use provided URL, or fall back to public/env URL
+    base_url = base_url or settings.ghostfolio_public_url or settings.ghostfolio_base_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             # First, try exchanging as a security token
@@ -78,29 +78,37 @@ async def _validate_ghostfolio_token(token: str) -> bool:
 
 class LoginRequest(BaseModel):
     ghostfolio_token: str
+    ghostfolio_url: str | None = None
 
 
 @router.post("/api/auth/login")
 async def login(request: LoginRequest):
     """Validate Ghostfolio token, create/find user, return JWT."""
-    is_valid = await _validate_ghostfolio_token(request.ghostfolio_token)
+    # Normalize custom URL: strip trailing slashes
+    custom_url = request.ghostfolio_url.rstrip("/") if request.ghostfolio_url else None
+
+    is_valid = await _validate_ghostfolio_token(request.ghostfolio_token, base_url=custom_url)
     if not is_valid:
         raise HTTPException(status_code=401, detail="Invalid Ghostfolio token")
 
     settings = get_settings()
     db = await _get_auth_db()
 
-    # Determine role
-    role = "admin" if request.ghostfolio_token == settings.ghostfolio_access_token else "user"
+    # Admin only if token matches env AND no custom URL (same Ghostfolio instance)
+    role = "admin" if (request.ghostfolio_token == settings.ghostfolio_access_token and not custom_url) else "user"
 
     # Find existing user or create new one
     existing = await db.find_user_by_token(request.ghostfolio_token)
     if existing:
         await db.update_last_login(existing["id"])
+        # Update URL on re-login (user may change their instance)
+        await db.update_ghostfolio_url(existing["id"], custom_url)
         user = existing
         user["role"] = role
     else:
-        user = await db.create_user(ghostfolio_token=request.ghostfolio_token, role=role)
+        user = await db.create_user(
+            ghostfolio_token=request.ghostfolio_token, role=role, ghostfolio_url=custom_url,
+        )
 
     jwt = create_token(user["id"], user["role"], settings.jwt_secret)
     return {"token": jwt, "role": user["role"], "user_id": user["id"]}

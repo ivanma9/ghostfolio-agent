@@ -25,6 +25,12 @@ class AuthDB:
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.executescript(_SCHEMA)
+        # Migration: add ghostfolio_url column for existing DBs
+        try:
+            await self._conn.execute("ALTER TABLE users ADD COLUMN ghostfolio_url BLOB")
+            await self._conn.commit()
+        except Exception:
+            pass  # Column already exists
 
     async def close(self) -> None:
         if self._conn:
@@ -32,18 +38,23 @@ class AuthDB:
 
     # ── Users ──────────────────────────────────────────────
 
-    async def create_user(self, *, ghostfolio_token: str | None, role: str) -> dict:
+    async def create_user(
+        self, *, ghostfolio_token: str | None, role: str, ghostfolio_url: str | None = None,
+    ) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         user_id = str(uuid.uuid4())
         encrypted = None
         token_hash = None
+        encrypted_url = None
         if ghostfolio_token:
             encrypted = encrypt_token(ghostfolio_token, self._encryption_key)
             token_hash = hashlib.sha256(ghostfolio_token.encode()).hexdigest()
+        if ghostfolio_url:
+            encrypted_url = encrypt_token(ghostfolio_url, self._encryption_key)
         await self._conn.execute(
-            "INSERT INTO users (id, ghostfolio_token, token_hash, role, created_at, last_login_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, encrypted, token_hash, role, now, now),
+            "INSERT INTO users (id, ghostfolio_token, token_hash, ghostfolio_url, role, created_at, last_login_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, encrypted, token_hash, encrypted_url, role, now, now),
         )
         await self._conn.commit()
         return {"id": user_id, "role": role, "created_at": now, "last_login_at": now}
@@ -64,6 +75,22 @@ class AuthDB:
         if not row or not row["ghostfolio_token"]:
             return None
         return decrypt_token(row["ghostfolio_token"], self._encryption_key)
+
+    async def get_decrypted_url(self, user_id: str) -> str | None:
+        cursor = await self._conn.execute(
+            "SELECT ghostfolio_url FROM users WHERE id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        if not row or not row["ghostfolio_url"]:
+            return None
+        return decrypt_token(row["ghostfolio_url"], self._encryption_key)
+
+    async def update_ghostfolio_url(self, user_id: str, url: str | None) -> None:
+        encrypted_url = encrypt_token(url, self._encryption_key) if url else None
+        await self._conn.execute(
+            "UPDATE users SET ghostfolio_url = ? WHERE id = ?", (encrypted_url, user_id)
+        )
+        await self._conn.commit()
 
     async def find_user_by_token(self, plaintext_token: str) -> dict | None:
         token_hash = hashlib.sha256(plaintext_token.encode()).hexdigest()
@@ -149,6 +176,7 @@ CREATE TABLE IF NOT EXISTS users (
     id              TEXT PRIMARY KEY,
     ghostfolio_token BLOB,
     token_hash      TEXT,
+    ghostfolio_url  BLOB,
     role            TEXT NOT NULL,
     created_at      TEXT NOT NULL,
     last_login_at   TEXT NOT NULL

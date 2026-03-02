@@ -76,6 +76,40 @@ class TestUsers:
         await db.delete_user(user["id"])
         assert await db.get_user(user["id"]) is None
 
+    @pytest.mark.asyncio
+    async def test_create_user_with_url(self, db):
+        user = await db.create_user(
+            ghostfolio_token="tok", role="user", ghostfolio_url="https://my.ghostfolio.com"
+        )
+        url = await db.get_decrypted_url(user["id"])
+        assert url == "https://my.ghostfolio.com"
+
+    @pytest.mark.asyncio
+    async def test_create_user_without_url(self, db):
+        user = await db.create_user(ghostfolio_token="tok", role="user")
+        url = await db.get_decrypted_url(user["id"])
+        assert url is None
+
+    @pytest.mark.asyncio
+    async def test_get_decrypted_url_nonexistent_user(self, db):
+        url = await db.get_decrypted_url("no-such-id")
+        assert url is None
+
+    @pytest.mark.asyncio
+    async def test_update_ghostfolio_url(self, db):
+        user = await db.create_user(ghostfolio_token="tok", role="user")
+        assert await db.get_decrypted_url(user["id"]) is None
+        await db.update_ghostfolio_url(user["id"], "https://new.ghostfolio.io")
+        assert await db.get_decrypted_url(user["id"]) == "https://new.ghostfolio.io"
+
+    @pytest.mark.asyncio
+    async def test_update_ghostfolio_url_clear(self, db):
+        user = await db.create_user(
+            ghostfolio_token="tok", role="user", ghostfolio_url="https://old.url"
+        )
+        await db.update_ghostfolio_url(user["id"], None)
+        assert await db.get_decrypted_url(user["id"]) is None
+
 
 class TestPaperPortfolios:
     @pytest.mark.asyncio

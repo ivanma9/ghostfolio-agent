@@ -138,7 +138,10 @@ async def _get_user_client(user: dict) -> GhostfolioClient | None:
     if not token:
         return None
     settings = get_settings()
-    return GhostfolioClient(base_url=settings.ghostfolio_base_url, access_token=token)
+    # Use per-user Ghostfolio URL if stored, otherwise fall back to env default
+    custom_url = await db.get_decrypted_url(user["id"])
+    base_url = custom_url or settings.ghostfolio_base_url
+    return GhostfolioClient(base_url=base_url, access_token=token)
 
 
 async def _create_agent_for_request(model_name: str, client: GhostfolioClient | None, guest: bool = False):

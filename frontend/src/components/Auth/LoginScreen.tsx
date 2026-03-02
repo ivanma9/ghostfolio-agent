@@ -1,12 +1,14 @@
 import { useState } from 'react'
 
 interface LoginScreenProps {
-  onLogin: (token: string) => Promise<void>
+  onLogin: (token: string, ghostfolioUrl?: string) => Promise<void>
   onGuestLogin: () => Promise<void>
 }
 
 export function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps) {
   const [token, setToken] = useState('')
+  const [ghostfolioUrl, setGhostfolioUrl] = useState('')
+  const [showSelfHosted, setShowSelfHosted] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -16,7 +18,7 @@ export function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps) {
     setIsLoading(true)
     setError('')
     try {
-      await onLogin(token.trim())
+      await onLogin(token.trim(), ghostfolioUrl.trim() || undefined)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -67,6 +69,37 @@ export function LoginScreen({ onLogin, onGuestLogin }: LoginScreenProps) {
               <p className="text-xs text-slate-400 mt-1">
                 Find this in your Ghostfolio account under Settings
               </p>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowSelfHosted(!showSelfHosted)}
+                className="text-xs text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+              >
+                <svg
+                  className={`w-3 h-3 transition-transform ${showSelfHosted ? 'rotate-90' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Self-hosted instance?
+              </button>
+              {showSelfHosted && (
+                <div className="mt-2">
+                  <input
+                    type="url"
+                    value={ghostfolioUrl}
+                    onChange={(e) => setGhostfolioUrl(e.target.value)}
+                    placeholder="https://ghostfolio.example.com"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                    disabled={isLoading}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Leave empty to use the default instance
+                  </p>
+                </div>
+              )}
             </div>
 
             {error && (

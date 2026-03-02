@@ -75,6 +75,79 @@ class TestLogin:
                     await login(LoginRequest(ghostfolio_token="bad-token"))
                 assert exc_info.value.status_code == 401
 
+    @pytest.mark.asyncio
+    async def test_login_with_custom_url(self, mock_settings):
+        from ghostfolio_agent.api.auth import login, LoginRequest
+
+        mock_db = AsyncMock()
+        mock_db.find_user_by_token.return_value = None
+        mock_db.create_user.return_value = {"id": "u1", "role": "user"}
+
+        with patch("ghostfolio_agent.api.auth._validate_ghostfolio_token", return_value=True) as mock_validate:
+            with patch("ghostfolio_agent.api.auth._get_auth_db", return_value=mock_db):
+                result = await login(LoginRequest(
+                    ghostfolio_token="my-tok",
+                    ghostfolio_url="https://my.ghostfolio.com/",
+                ))
+
+        # URL should be normalized (trailing slash stripped)
+        mock_validate.assert_called_once_with("my-tok", base_url="https://my.ghostfolio.com")
+        mock_db.create_user.assert_called_once_with(
+            ghostfolio_token="my-tok", role="user", ghostfolio_url="https://my.ghostfolio.com",
+        )
+        assert result["role"] == "user"
+
+    @pytest.mark.asyncio
+    async def test_login_without_custom_url(self, mock_settings):
+        from ghostfolio_agent.api.auth import login, LoginRequest
+
+        mock_db = AsyncMock()
+        mock_db.find_user_by_token.return_value = None
+        mock_db.create_user.return_value = {"id": "u2", "role": "user"}
+
+        with patch("ghostfolio_agent.api.auth._validate_ghostfolio_token", return_value=True) as mock_validate:
+            with patch("ghostfolio_agent.api.auth._get_auth_db", return_value=mock_db):
+                result = await login(LoginRequest(ghostfolio_token="tok"))
+
+        mock_validate.assert_called_once_with("tok", base_url=None)
+        mock_db.create_user.assert_called_once_with(
+            ghostfolio_token="tok", role="user", ghostfolio_url=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_admin_with_custom_url_gets_user_role(self, mock_settings):
+        """Admin token + custom URL = user role (different instance)."""
+        from ghostfolio_agent.api.auth import login, LoginRequest
+
+        mock_db = AsyncMock()
+        mock_db.find_user_by_token.return_value = None
+        mock_db.create_user.return_value = {"id": "u3", "role": "user"}
+
+        with patch("ghostfolio_agent.api.auth._validate_ghostfolio_token", return_value=True):
+            with patch("ghostfolio_agent.api.auth._get_auth_db", return_value=mock_db):
+                result = await login(LoginRequest(
+                    ghostfolio_token="admin-env-token",
+                    ghostfolio_url="https://other.instance.com",
+                ))
+
+        assert result["role"] == "user"
+
+    @pytest.mark.asyncio
+    async def test_relogin_updates_url(self, mock_settings):
+        from ghostfolio_agent.api.auth import login, LoginRequest
+
+        mock_db = AsyncMock()
+        mock_db.find_user_by_token.return_value = {"id": "existing", "role": "user"}
+
+        with patch("ghostfolio_agent.api.auth._validate_ghostfolio_token", return_value=True):
+            with patch("ghostfolio_agent.api.auth._get_auth_db", return_value=mock_db):
+                await login(LoginRequest(
+                    ghostfolio_token="tok",
+                    ghostfolio_url="https://new.instance.com",
+                ))
+
+        mock_db.update_ghostfolio_url.assert_called_once_with("existing", "https://new.instance.com")
+
 
 class TestGuest:
     @pytest.mark.asyncio
