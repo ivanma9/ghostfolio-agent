@@ -31,24 +31,34 @@ async def _validate_ghostfolio_token(token: str) -> bool:
     Bearer JWTs (start with 'eyJ') are used directly as Authorization headers.
     """
     settings = get_settings()
+    base_url = settings.ghostfolio_base_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             # First, try using it as a Bearer JWT (test against a lightweight endpoint)
             resp = await client.get(
-                f"{settings.ghostfolio_base_url}/api/v1/user",
+                f"{base_url}/api/v1/user",
                 headers={"Authorization": f"Bearer {token}"},
+            )
+            logger.info(
+                "ghostfolio_bearer_check",
+                status=resp.status_code,
+                base_url=base_url,
             )
             if resp.status_code == 200:
                 return True
 
             # If that fails, try exchanging as a security token
             resp = await client.post(
-                f"{settings.ghostfolio_base_url}/api/v1/auth/anonymous",
+                f"{base_url}/api/v1/auth/anonymous",
                 json={"accessToken": token},
+            )
+            logger.info(
+                "ghostfolio_security_token_check",
+                status=resp.status_code,
             )
             return resp.status_code == 201
     except Exception as e:
-        logger.warning("ghostfolio_token_validation_failed", error=str(e))
+        logger.warning("ghostfolio_token_validation_failed", error=str(e), base_url=base_url)
         return False
 
 
