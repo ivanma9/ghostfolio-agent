@@ -29,8 +29,17 @@ async def _validate_ghostfolio_token(token: str) -> bool:
 
     Security tokens are short strings exchanged via POST /auth/anonymous.
     Bearer JWTs (start with 'eyJ') are used directly as Authorization headers.
+
+    If the token matches the env-configured GHOSTFOLIO_ACCESS_TOKEN, it is
+    trusted without a round-trip to Ghostfolio (avoids internal networking issues).
     """
     settings = get_settings()
+
+    # Fast path: admin token is pre-trusted (it's the same one the system uses)
+    if token == settings.ghostfolio_access_token:
+        logger.info("ghostfolio_token_trusted", reason="matches_env_token")
+        return True
+
     base_url = settings.ghostfolio_base_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
