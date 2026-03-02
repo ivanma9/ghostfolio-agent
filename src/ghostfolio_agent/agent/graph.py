@@ -48,20 +48,18 @@ ALERTS: Messages may be prefixed with "ALERTS:" containing proactive notificatio
 
 # OpenRouter model catalog
 AVAILABLE_MODELS = [
+    {"id": "gpt-4o-mini-direct", "name": "GPT-4o Mini", "provider": "OpenAI"},
     {"id": "anthropic/claude-sonnet-4", "name": "Claude Sonnet 4", "provider": "Anthropic"},
     {"id": "anthropic/claude-haiku-4", "name": "Claude Haiku 4", "provider": "Anthropic"},
     {"id": "openai/gpt-4o", "name": "GPT-4o", "provider": "OpenAI"},
-    {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "OpenAI"},
     {"id": "openai/o3-mini", "name": "o3-mini", "provider": "OpenAI"},
     {"id": "google/gemini-2.5-pro-preview", "name": "Gemini 2.5 Pro", "provider": "Google"},
     {"id": "google/gemini-2.0-flash-001", "name": "Gemini 2.0 Flash", "provider": "Google"},
     {"id": "deepseek/deepseek-chat-v3-0324", "name": "DeepSeek V3", "provider": "DeepSeek"},
     {"id": "meta-llama/llama-4-maverick", "name": "Llama 4 Maverick", "provider": "Meta"},
-    # OpenAI direct (bypasses OpenRouter — cheap for evals)
-    {"id": "gpt-4o-mini-direct", "name": "GPT-4o Mini (Direct)", "provider": "OpenAI Direct"},
 ]
 
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = "gpt-4o-mini-direct"
 
 # Models that go direct to provider instead of through OpenRouter
 OPENAI_DIRECT_MODELS = {"gpt-4o-mini-direct": "gpt-4o-mini"}
