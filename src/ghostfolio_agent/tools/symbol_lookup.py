@@ -10,7 +10,7 @@ def create_symbol_lookup_tool(client: GhostfolioClient):
     @tool
     @ttl_cache(ttl=3600)
     async def symbol_lookup(query: str) -> str:
-        """Look up a stock, ETF, or cryptocurrency by name or ticker symbol. Use this when the user asks about a specific security or wants to know what a ticker is. Do NOT use this for price queries — use stock_quote instead."""
+        """Look up a stock, ETF, or cryptocurrency by name or ticker symbol. Use this when the user asks about a specific security or wants to know what a ticker is. Do NOT use this for price queries — use stock_quote instead. Do NOT use this for conviction score or signal strength queries — use conviction_score instead."""
         try:
             data = await client.lookup_symbol(query)
         except Exception as e:
