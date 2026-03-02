@@ -196,6 +196,5 @@ def create_agent(
         prompt=SYSTEM_PROMPT,
         pre_model_hook=_make_context_trimmer(max_context_messages),
         checkpointer=checkpointer,
-        recursion_limit=25,
     )
     return agent

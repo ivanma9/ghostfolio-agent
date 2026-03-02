@@ -325,7 +325,7 @@ async def chat(request: ChatRequest):
             content = f"{alert_block}\n\nUser message: {content}"
 
         # Checkpointer manages history per thread_id — only send the new message
-        config = {"configurable": {"thread_id": request.session_id}}
+        config = {"configurable": {"thread_id": request.session_id}, "recursion_limit": 25}
 
         try:
             async with asyncio.timeout(90):
