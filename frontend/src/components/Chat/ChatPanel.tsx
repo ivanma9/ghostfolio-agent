@@ -12,7 +12,7 @@ interface ChatPanelProps {
   selectedModel: string
   onModelChange: (modelId: string) => void
   isPaperTrading: boolean
-  onPaperTradingChange: (active: boolean) => void
+  onPaperTradingChange?: (active: boolean) => void
 }
 
 const SUGGESTED_QUERIES = [
@@ -132,7 +132,9 @@ export default function ChatPanel({ messages, isLoading, onSend, selectedModel, 
         leftSlot={
           <>
             <ModelSelector selectedModel={selectedModel} onModelChange={onModelChange} />
-            <PaperTradeToggle isActive={isPaperTrading} onChange={onPaperTradingChange} />
+            {onPaperTradingChange && (
+              <PaperTradeToggle isActive={isPaperTrading} onChange={onPaperTradingChange} />
+            )}
           </>
         }
       />

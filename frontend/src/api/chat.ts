@@ -2,6 +2,17 @@ import type { ChatRequest, ChatResponse } from '../types'
 
 export type ChatErrorType = 'timeout' | 'network' | 'server'
 
+function getAuthHeaders(): Record<string, string> {
+  const stored = localStorage.getItem('ghostfolio-auth')
+  if (!stored) return {}
+  try {
+    const { jwt } = JSON.parse(stored)
+    return jwt ? { Authorization: `Bearer ${jwt}` } : {}
+  } catch {
+    return {}
+  }
+}
+
 const ERROR_MESSAGES: Record<ChatErrorType, string> = {
   timeout: 'That took too long. Try a simpler question or try again.',
   network: "Couldn't reach the server. Check your connection and try again.",
@@ -21,7 +32,7 @@ export async function postChat(request: ChatRequest): Promise<ChatResponse> {
   try {
     response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(request),
     })
   } catch (err) {
@@ -35,6 +46,11 @@ export async function postChat(request: ChatRequest): Promise<ChatResponse> {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('ghostfolio-auth')
+      window.location.reload()
+      throw new ChatError('server')
+    }
     if (response.status === 408) {
       throw new ChatError('timeout')
     }
@@ -47,12 +63,17 @@ export async function postChat(request: ChatRequest): Promise<ChatResponse> {
 export async function fetchPortfolio(): Promise<{ totalValue: number; dailyChange: number; dailyChangePercent: number; positions: Array<{ symbol: string; name: string; quantity: number; price: number; value: number; allocation: number; currency: string }> }> {
   let response: Response
   try {
-    response = await fetch('/api/portfolio')
+    response = await fetch('/api/portfolio', { headers: getAuthHeaders() })
   } catch {
     throw new ChatError('network')
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('ghostfolio-auth')
+      window.location.reload()
+      throw new ChatError('server')
+    }
     throw new ChatError('server')
   }
 
@@ -76,12 +97,17 @@ export async function fetchPortfolio(): Promise<{ totalValue: number; dailyChang
 export async function fetchPaperPortfolio(): Promise<import('../types').PaperPortfolio> {
   let response: Response
   try {
-    response = await fetch('/api/paper-portfolio')
+    response = await fetch('/api/paper-portfolio', { headers: getAuthHeaders() })
   } catch {
     throw new ChatError('network')
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('ghostfolio-auth')
+      window.location.reload()
+      throw new ChatError('server')
+    }
     throw new ChatError('server')
   }
 

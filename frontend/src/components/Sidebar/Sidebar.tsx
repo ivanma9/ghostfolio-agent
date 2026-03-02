@@ -10,10 +10,12 @@ interface SidebarProps {
   dailyChange: { value: number; percent: number };
   isLoading: boolean;
   isPaperTrading?: boolean;
+  isGuest?: boolean;
   error?: string | null;
   onRetry?: () => void;
   alerts?: AlertItem[];
   onHoldingClick?: (symbol: string) => void;
+  onLogout?: () => void;
 }
 
 function ChartIcon() {
@@ -34,7 +36,7 @@ function ChartIcon() {
   );
 }
 
-export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false, error, onRetry, alerts = [], onHoldingClick }: SidebarProps) {
+export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false, isGuest = false, error, onRetry, alerts = [], onHoldingClick, onLogout }: SidebarProps) {
   return (
     <aside className="w-72 h-full border-r border-gray-100 bg-white overflow-y-auto flex-shrink-0">
       <div className="p-5 space-y-6">
@@ -96,6 +98,24 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPa
         {/* Top Holdings */}
         <section>
           <TopHoldings holdings={holdings} onHoldingClick={onHoldingClick} />
+        </section>
+
+        {/* Guest CTA when no portfolio */}
+        {isGuest && !isPaperTrading && holdings.length === 0 && !isLoading && (
+          <section className="bg-slate-50 rounded-xl p-4 text-center">
+            <p className="text-sm text-slate-600 font-medium">No portfolio connected</p>
+            <p className="text-xs text-slate-400 mt-1">Enable paper trading to get started</p>
+          </section>
+        )}
+
+        {/* Footer */}
+        <section className="pt-4 border-t border-slate-100">
+          <button
+            onClick={onLogout}
+            className="w-full text-xs text-slate-400 hover:text-slate-600 transition-colors py-1"
+          >
+            {isGuest ? 'Exit Guest Mode' : 'Sign Out'}
+          </button>
         </section>
       </div>
     </aside>

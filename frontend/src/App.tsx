@@ -1,14 +1,18 @@
 import { useState, useCallback } from 'react'
 import ChatPanel from './components/Chat/ChatPanel'
 import { Sidebar } from './components/Sidebar/Sidebar'
+import { LoginScreen } from './components/Auth/LoginScreen'
+import { useAuth } from './hooks/useAuth'
 import { useChat } from './hooks/useChat'
 import { useSidebar } from './hooks/useSidebar'
 
 function App() {
+  const auth = useAuth()
   const [selectedModel, setSelectedModel] = useState('')
-  const [isPaperTrading, setIsPaperTrading] = useState(false)
+  // Guests always paper trade; regular users default to false
+  const [isPaperTrading, setIsPaperTrading] = useState(auth.isGuest)
 
-  const sidebar = useSidebar(isPaperTrading)
+  const sidebar = useSidebar(isPaperTrading, auth.isGuest)
 
   const handleToolCall = useCallback(
     (toolCalls: string[]) => {
@@ -35,6 +39,16 @@ function App() {
     [handleSend],
   )
 
+  // Auth gate
+  if (!auth.isAuthenticated) {
+    return (
+      <LoginScreen
+        onLogin={async (token) => { await auth.login(token) }}
+        onGuestLogin={async () => { await auth.loginAsGuest() }}
+      />
+    )
+  }
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -45,10 +59,12 @@ function App() {
           dailyChange={sidebar.dailyChange}
           isLoading={sidebar.isLoading}
           isPaperTrading={isPaperTrading}
+          isGuest={auth.isGuest}
           error={sidebar.error}
           onRetry={sidebar.refresh}
           alerts={chat.activeAlerts}
           onHoldingClick={handleHoldingClick}
+          onLogout={auth.logout}
         />
       </div>
 
@@ -81,7 +97,7 @@ function App() {
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           isPaperTrading={isPaperTrading}
-          onPaperTradingChange={setIsPaperTrading}
+          onPaperTradingChange={auth.isGuest ? undefined : setIsPaperTrading}
         />
       </div>
     </div>
