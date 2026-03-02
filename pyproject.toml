@@ -25,6 +25,8 @@ dependencies = [
     "rich>=14.3.3",
     "langchain-google-genai>=4.2.1",
     "aiosqlite>=0.22.1",
+    "PyJWT>=2.9",
+    "cryptography>=44.0",
 ]
 
 [dependency-groups]
