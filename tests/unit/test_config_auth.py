@@ -18,8 +18,9 @@ def test_settings_has_auth_fields(monkeypatch):
 def test_settings_jwt_secret_defaults_empty(monkeypatch):
     """JWT secret should default to empty string for backwards compat."""
     monkeypatch.setenv("GHOSTFOLIO_ACCESS_TOKEN", "test-token")
-    # Don't set JWT_SECRET or ENCRYPTION_KEY
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.delenv("ENCRYPTION_KEY", raising=False)
     from ghostfolio_agent.config import Settings
-    s = Settings()
+    s = Settings(_env_file=None)  # skip .env file
     assert s.jwt_secret == ""
     assert s.encryption_key == ""
