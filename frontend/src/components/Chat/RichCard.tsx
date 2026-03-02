@@ -371,14 +371,14 @@ export function parseHoldingDetail(text: string): HoldingDetailData | null {
 }
 
 function parseMorningBriefing(text: string): MorningBriefingData | null {
-  if (!text.includes('Morning Briefing:')) return null
+  if (!text.includes('Morning Briefing')) return null
 
-  const dateMatch = text.match(/Morning Briefing:\s*(.+)/)
-  const briefingDate = dateMatch?.[1]?.trim() || new Date().toLocaleDateString()
+  const dateMatch = text.match(/\*{0,2}Morning Briefing:?\*{0,2}\s*(.+)/)
+  const briefingDate = dateMatch?.[1]?.replace(/\*+/g, '').trim() || new Date().toLocaleDateString()
 
-  const totalValueMatch = text.match(/Total Value:\s*\$([\d,]+\.?\d*)/)
-  const dailyChangeMatch = text.match(/Daily Change:\s*([+-]?[\d.]+)%\s*\(\$([+-]?[\d,.]+)\)/)
-  const holdingsCountMatch = text.match(/Holdings:\s*(\d+)/)
+  const totalValueMatch = text.match(/\*{0,2}Total Value:?\*{0,2}\s*\$?([\d,]+\.?\d*)/)
+  const dailyChangeMatch = text.match(/\*{0,2}Daily Change:?\*{0,2}\s*\+?([+-]?[\d.]+)%\s*\(\$?([+-]?[\d,.]+)\)/)
+  const holdingsCountMatch = text.match(/\*{0,2}Holdings:?\*{0,2}\s*(\d+)/)
 
   const portfolioOverview = {
     totalValue: totalValueMatch ? parseFloat(totalValueMatch[1].replace(/,/g, '')) : 0,
