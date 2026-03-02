@@ -40,7 +40,14 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   return null;
 }
 
-function renderActiveShape(props: any) {
+interface ActiveShapeProps {
+  cx: number; cy: number;
+  innerRadius: number; outerRadius: number;
+  startAngle: number; endAngle: number;
+  fill?: string;
+}
+
+function renderActiveShape(props: ActiveShapeProps) {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
   return (
     <g>

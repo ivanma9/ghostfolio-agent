@@ -84,11 +84,9 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPa
         )}
 
         {/* Alerts Section */}
-        {alerts.length > 0 && (
-          <section>
-            <AlertsSection alerts={alerts} onAlertClick={onHoldingClick} />
-          </section>
-        )}
+        <section>
+          <AlertsSection alerts={alerts} onAlertClick={onHoldingClick} />
+        </section>
 
         {/* Allocation Chart */}
         <section>

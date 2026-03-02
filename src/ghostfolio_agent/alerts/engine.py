@@ -5,6 +5,7 @@ import json
 import os
 import time
 import structlog
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from filelock import FileLock
@@ -27,6 +28,13 @@ from ghostfolio_agent.tools.conviction_score import (
     CONGRESSIONAL_WEIGHT,
     EARNINGS_WEIGHT,
 )
+
+@dataclass
+class AlertResult:
+    symbol: str
+    condition: str
+    message: str
+
 
 COOLDOWN_TTL = 86400  # 24 hours in seconds
 _COOLDOWN_PATH = Path("data/alert_cooldowns.json")
@@ -200,7 +208,7 @@ class AlertEngine:
         alpha_vantage: AlphaVantageClient | None = None,
         fmp: FMPClient | None = None,
         congressional: CongressionalClient | None = None,
-    ) -> list[str]:
+    ) -> list[AlertResult]:
         """Run two-phase alert checks across all portfolio holdings.
 
         Phase 1: parallel quote + earnings + congressional fetch for all symbols.
@@ -223,7 +231,7 @@ class AlertEngine:
             return []
 
         symbols = list(holdings.keys())
-        alerts: list[str] = []
+        alerts: list[AlertResult] = []
         today = date.today()
 
         # ------------------------------------------------------------------
@@ -263,21 +271,21 @@ class AlertEngine:
             earnings_result = self._check_earnings_proximity(sym, earnings_map.get(sym), today)
             key = f"{sym}:earnings"
             if earnings_result and self._is_cooled_down(key):
-                alerts.append(earnings_result)
+                alerts.append(AlertResult(symbol=sym, condition="earnings_proximity", message=earnings_result))
                 self._record(key)
                 flagged_symbols.add(sym)
 
             big_mover_result = self._check_big_mover(sym, quotes.get(sym))
             key = f"{sym}:big_mover"
             if big_mover_result and self._is_cooled_down(key):
-                alerts.append(big_mover_result)
+                alerts.append(AlertResult(symbol=sym, condition="big_mover", message=big_mover_result))
                 self._record(key)
                 flagged_symbols.add(sym)
 
             congressional_result = self._check_congressional_trade(sym, congressional_map.get(sym))
             key = f"{sym}:congressional_trade"
             if congressional_result and self._is_cooled_down(key):
-                alerts.append(congressional_result)
+                alerts.append(AlertResult(symbol=sym, condition="congressional_trade", message=congressional_result))
                 self._record(key)
                 flagged_symbols.add(sym)
 
@@ -337,7 +345,7 @@ class AlertEngine:
             analyst_result = self._check_analyst_downgrade(sym, analyst_map.get(sym))
             key = f"{sym}:analyst_downgrade"
             if analyst_result and self._is_cooled_down(key):
-                alerts.append(analyst_result)
+                alerts.append(AlertResult(symbol=sym, condition="analyst_downgrade", message=analyst_result))
                 self._record(key)
 
             conviction_result = self._check_low_conviction(
@@ -351,7 +359,7 @@ class AlertEngine:
             )
             key = f"{sym}:low_conviction"
             if conviction_result and self._is_cooled_down(key):
-                alerts.append(conviction_result)
+                alerts.append(AlertResult(symbol=sym, condition="low_conviction", message=conviction_result))
                 self._record(key)
 
         return alerts

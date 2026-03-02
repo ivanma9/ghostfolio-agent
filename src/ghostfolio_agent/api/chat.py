@@ -22,7 +22,7 @@ from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.config import get_settings
 from ghostfolio_agent.verification.pipeline import run_verification_pipeline, PipelineResult
-from ghostfolio_agent.alerts.engine import AlertEngine
+from ghostfolio_agent.alerts.engine import AlertEngine, AlertResult
 
 router = APIRouter()
 
@@ -34,40 +34,6 @@ _ALERT_SEVERITY: dict[str, str] = {
     "analyst_downgrade": "critical",
     "congressional_trade": "warning",
 }
-
-# Alert string patterns → condition keys
-_ALERT_PATTERNS: list[tuple[str, str]] = [
-    ("earnings in", "earnings_proximity"),
-    ("significant daily move", "big_mover"),
-    ("conviction score dropped", "low_conviction"),
-    ("analyst consensus shifted", "analyst_downgrade"),
-    ("congressional trades", "congressional_trade"),
-]
-
-
-def _parse_alert_strings(alert_strings: list[str]) -> list[AlertItem]:
-    """Parse alert engine string outputs into structured AlertItem objects."""
-    items: list[AlertItem] = []
-    for alert_str in alert_strings:
-        # Extract symbol (first word)
-        parts = alert_str.split(maxsplit=1)
-        symbol = parts[0] if parts else "?"
-
-        # Match condition by substring
-        condition = "unknown"
-        for pattern, cond in _ALERT_PATTERNS:
-            if pattern in alert_str:
-                condition = cond
-                break
-
-        severity = _ALERT_SEVERITY.get(condition, "warning")
-        items.append(AlertItem(
-            symbol=symbol,
-            condition=condition,
-            message=alert_str,
-            severity=severity,
-        ))
-    return items
 
 # Shared state
 _client: GhostfolioClient | None = None
@@ -365,9 +331,17 @@ async def chat(request: ChatRequest):
 
         structured_alerts: list[AlertItem] = []
         if alerts:
-            alert_block = "ALERTS:\n" + "\n".join(f"- {a}" for a in alerts)
+            alert_block = "ALERTS:\n" + "\n".join(f"- {a.message}" for a in alerts)
             content = f"{alert_block}\n\nUser message: {content}"
-            structured_alerts = _parse_alert_strings(alerts)
+            structured_alerts = [
+                AlertItem(
+                    symbol=a.symbol,
+                    condition=a.condition,
+                    message=a.message,
+                    severity=_ALERT_SEVERITY.get(a.condition, "warning"),
+                )
+                for a in alerts
+            ]
 
         # Checkpointer manages history per thread_id — only send the new message
         config = {"configurable": {"thread_id": request.session_id}, "recursion_limit": 25}

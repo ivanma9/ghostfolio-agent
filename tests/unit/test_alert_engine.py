@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 from ghostfolio_agent.alerts.engine import (
     AlertEngine,
+    AlertResult,
     COOLDOWN_TTL,
 )
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
@@ -290,7 +291,7 @@ class TestCheckAlerts:
     async def test_finds_big_mover_and_earnings(self, mock_ghostfolio, mock_finnhub):
         engine = AlertEngine()
         alerts = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub)
-        alert_text = "\n".join(alerts)
+        alert_text = "\n".join(a.message for a in alerts)
         assert "AAPL" in alert_text
         assert "TSLA" in alert_text
 
@@ -368,7 +369,7 @@ class TestCheckAlertsWithCongressional:
 
         engine = AlertEngine()
         alerts = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
-        alert_text = "\n".join(alerts)
+        alert_text = "\n".join(a.message for a in alerts)
         assert "AAPL" in alert_text
         assert "congressional" in alert_text.lower()
 
@@ -384,11 +385,11 @@ class TestCheckAlertsWithCongressional:
 
         engine = AlertEngine()
         alerts1 = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
-        cong_alerts = [a for a in alerts1 if "congressional" in a.lower()]
+        cong_alerts = [a for a in alerts1 if "congressional" in a.message.lower()]
         assert len(cong_alerts) > 0
 
         alerts2 = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
-        cong_alerts2 = [a for a in alerts2 if "congressional" in a.lower()]
+        cong_alerts2 = [a for a in alerts2 if "congressional" in a.message.lower()]
         assert len(cong_alerts2) == 0  # suppressed by cooldown
 
     @pytest.mark.asyncio
@@ -406,7 +407,7 @@ class TestCheckAlertsWithCongressional:
 
         engine = AlertEngine()
         alerts = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub, congressional=congressional)
-        alert_text = "\n".join(alerts)
+        alert_text = "\n".join(a.message for a in alerts)
         # Finnhub alerts (big mover AAPL, earnings TSLA)
         assert "AAPL" in alert_text
         # Congressional alert for TSLA

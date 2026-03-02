@@ -20,7 +20,7 @@ export function AlertsSection({ alerts, onAlertClick }: AlertsSectionProps) {
 
   const hasCritical = sorted.some(a => a.severity === 'critical')
   const visible = expanded ? sorted : sorted.slice(0, 3)
-  const overflow = sorted.length - 3
+  const hiddenCount = sorted.length - 3
 
   return (
     <div className="rounded-2xl bg-amber-50/40 border border-amber-100 p-5 shadow-sm">
@@ -36,7 +36,7 @@ export function AlertsSection({ alerts, onAlertClick }: AlertsSectionProps) {
       </div>
 
       {/* Alert rows */}
-      <div className="space-y-0">
+      <div>
         {visible.map((alert, index) => (
           <div key={`${alert.symbol}:${alert.condition}`}>
             <button
@@ -72,15 +72,15 @@ export function AlertsSection({ alerts, onAlertClick }: AlertsSectionProps) {
       </div>
 
       {/* Overflow toggle */}
-      {overflow > 0 && !expanded && (
+      {hiddenCount > 0 && !expanded && (
         <button
           onClick={() => setExpanded(true)}
           className="mt-2 text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors cursor-pointer"
         >
-          +{overflow} more
+          +{hiddenCount} more
         </button>
       )}
-      {expanded && overflow > 0 && (
+      {expanded && hiddenCount > 0 && (
         <button
           onClick={() => setExpanded(false)}
           className="mt-2 text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors cursor-pointer"
