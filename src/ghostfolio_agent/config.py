@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     # Ghostfolio
     ghostfolio_base_url: str = "http://localhost:3333"
+    ghostfolio_public_url: str = ""  # Public URL for token validation (internal URL may reject auth)
     ghostfolio_access_token: str
 
     # LangSmith

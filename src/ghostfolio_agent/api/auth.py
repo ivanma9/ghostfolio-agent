@@ -40,10 +40,24 @@ async def _validate_ghostfolio_token(token: str) -> bool:
         logger.info("ghostfolio_token_trusted", reason="matches_env_token")
         return True
 
-    base_url = settings.ghostfolio_base_url
+    # Use public URL for validation (internal Railway URLs reject Bearer auth)
+    base_url = settings.ghostfolio_public_url or settings.ghostfolio_base_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # First, try using it as a Bearer JWT (test against a known-working endpoint)
+            # First, try exchanging as a security token
+            resp = await client.post(
+                f"{base_url}/api/v1/auth/anonymous",
+                json={"accessToken": token},
+            )
+            logger.info(
+                "ghostfolio_security_token_check",
+                status=resp.status_code,
+                base_url=base_url,
+            )
+            if resp.status_code == 201:
+                return True
+
+            # If that fails, try using it as a Bearer JWT
             resp = await client.get(
                 f"{base_url}/api/v1/portfolio/holdings",
                 headers={"Authorization": f"Bearer {token}"},
@@ -56,16 +70,7 @@ async def _validate_ghostfolio_token(token: str) -> bool:
             if resp.status_code == 200:
                 return True
 
-            # If that fails, try exchanging as a security token
-            resp = await client.post(
-                f"{base_url}/api/v1/auth/anonymous",
-                json={"accessToken": token},
-            )
-            logger.info(
-                "ghostfolio_security_token_check",
-                status=resp.status_code,
-            )
-            return resp.status_code == 201
+            return False
     except Exception as e:
         logger.warning("ghostfolio_token_validation_failed", error=str(e), base_url=base_url)
         return False
