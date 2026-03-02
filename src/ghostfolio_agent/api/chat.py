@@ -10,7 +10,7 @@ from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from ghostfolio_agent.models.api import Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse, PortfolioPositionResponse, PortfolioResponse
+from ghostfolio_agent.models.api import AlertItem, Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse, PortfolioPositionResponse, PortfolioResponse
 from ghostfolio_agent.tools.paper_trade import load_portfolio, _STARTING_CASH
 
 logger = structlog.get_logger()
@@ -25,6 +25,49 @@ from ghostfolio_agent.verification.pipeline import run_verification_pipeline, Pi
 from ghostfolio_agent.alerts.engine import AlertEngine
 
 router = APIRouter()
+
+# Alert condition → severity mapping
+_ALERT_SEVERITY: dict[str, str] = {
+    "earnings_proximity": "warning",
+    "big_mover": "warning",
+    "low_conviction": "critical",
+    "analyst_downgrade": "critical",
+    "congressional_trade": "warning",
+}
+
+# Alert string patterns → condition keys
+_ALERT_PATTERNS: list[tuple[str, str]] = [
+    ("earnings in", "earnings_proximity"),
+    ("significant daily move", "big_mover"),
+    ("conviction score dropped", "low_conviction"),
+    ("analyst consensus shifted", "analyst_downgrade"),
+    ("congressional trades", "congressional_trade"),
+]
+
+
+def _parse_alert_strings(alert_strings: list[str]) -> list[AlertItem]:
+    """Parse alert engine string outputs into structured AlertItem objects."""
+    items: list[AlertItem] = []
+    for alert_str in alert_strings:
+        # Extract symbol (first word)
+        parts = alert_str.split(maxsplit=1)
+        symbol = parts[0] if parts else "?"
+
+        # Match condition by substring
+        condition = "unknown"
+        for pattern, cond in _ALERT_PATTERNS:
+            if pattern in alert_str:
+                condition = cond
+                break
+
+        severity = _ALERT_SEVERITY.get(condition, "warning")
+        items.append(AlertItem(
+            symbol=symbol,
+            condition=condition,
+            message=alert_str,
+            severity=severity,
+        ))
+    return items
 
 # Shared state
 _client: GhostfolioClient | None = None
@@ -320,9 +363,11 @@ async def chat(request: ChatRequest):
             logger.warning("alert_check_failed", error=str(e))
             alerts = []
 
+        structured_alerts: list[AlertItem] = []
         if alerts:
             alert_block = "ALERTS:\n" + "\n".join(f"- {a}" for a in alerts)
             content = f"{alert_block}\n\nUser message: {content}"
+            structured_alerts = _parse_alert_strings(alerts)
 
         # Checkpointer manages history per thread_id — only send the new message
         config = {"configurable": {"thread_id": request.session_id}, "recursion_limit": 25}
@@ -343,6 +388,7 @@ async def chat(request: ChatRequest):
                 confidence="low",
                 citations=[],
                 data_sources=[],
+                alerts=[],
             )
         except GraphInterrupt as gi:
             # Human-in-the-loop: activity_log interrupted for confirmation
@@ -355,6 +401,7 @@ async def chat(request: ChatRequest):
                 confidence="high",
                 citations=[],
                 data_sources=[],
+                alerts=[],
             )
 
         # Extract response and tool calls from THIS turn only
@@ -421,6 +468,7 @@ async def chat(request: ChatRequest):
             verification_issues=pipeline_result.all_issues,
             verification_details=verification_details,
             data_sources=data_sources,
+            alerts=structured_alerts,
         )
     except Exception as e:
         logger.error("chat_endpoint_failed", error=str(e), session_id=request.session_id)
