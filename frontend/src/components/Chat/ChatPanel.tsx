@@ -128,6 +128,7 @@ export default function ChatPanel({ messages, isLoading, onSend, selectedModel, 
       <ChatInput
         onSend={onSend}
         disabled={isLoading}
+        isPaperTrading={isPaperTrading}
         leftSlot={
           <>
             <ModelSelector selectedModel={selectedModel} onModelChange={onModelChange} />
