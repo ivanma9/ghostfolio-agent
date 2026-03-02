@@ -56,3 +56,31 @@ class GhostfolioClient(BaseClient):
     async def create_order(self, order_data: dict) -> dict[str, Any]:
         """Create a new order/activity."""
         return await self._post("/api/v1/order", json_data=order_data)
+
+    async def get_benchmarks(self) -> dict[str, Any]:
+        """Get list of available benchmarks with performance and trend data."""
+        return await self._get("/api/v1/benchmarks")
+
+    async def get_benchmark_detail(
+        self,
+        data_source: str,
+        symbol: str,
+        start_date: str,
+        date_range: str = "max",
+    ) -> dict[str, Any]:
+        """Get historical benchmark data for a symbol from a start date.
+
+        Args:
+            data_source: Data source identifier (e.g. "YAHOO").
+            symbol: Ticker symbol (e.g. "SPY").
+            start_date: ISO date string for the start of the comparison (e.g. "2020-01-01").
+            date_range: Range filter — 1d, 1w, 1m, 3m, 6m, 1y, ytd, max (default "max").
+
+        Returns:
+            Dict with "marketData" key containing list of {date, value} objects where
+            value is percentage change from start_date (already multiplied by 100).
+        """
+        return await self._get(
+            f"/api/v1/benchmarks/{data_source}/{symbol}/{start_date}",
+            params={"range": date_range},
+        )

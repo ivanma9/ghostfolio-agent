@@ -19,6 +19,8 @@ Tool routing:
 - "conviction score for X", "signal on X", "score X" → conviction_score ONLY.
 - "tell me about X", "what's happening with X?" → holding_detail.
 - Portfolio questions ("how is my portfolio?") → portfolio_summary or portfolio_performance.
+- "am I beating the market?", "compare to S&P", "portfolio vs benchmark", "how's the market?", "market trend" → benchmark_comparison ONLY. Do NOT also call portfolio_performance (benchmark_comparison already includes portfolio return data).
+- "how did my portfolio do?" with no comparison intent → portfolio_performance ONLY.
 - Do NOT call transaction_history unless the user asks about trades.
 - Use the MINIMUM tools needed, but conviction_score is always required for evaluative questions.
 
@@ -41,6 +43,7 @@ Available tools:
 - congressional_trades: Search congressional stock trades by ticker, member, days, or transaction type
 - congressional_trades_summary: Get aggregate congressional trading statistics — buy/sell counts, sentiment
 - congressional_members: List the most active congressional traders with trade counts
+- benchmark_comparison: Compare portfolio performance against a market benchmark (S&P 500, etc.). Shows market context (trends, conditions, ATH distance) and calculates alpha. Use when user asks about beating the market, portfolio vs benchmark, or general market conditions.
 - activity_log: Record real portfolio activities (buy, sell, dividend) in Ghostfolio
 
 For recording real trades, use activity_log. Always confirm details with the user before recording.

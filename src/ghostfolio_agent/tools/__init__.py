@@ -19,6 +19,7 @@ from ghostfolio_agent.tools.congressional import (
     create_congressional_summary_tool,
     create_congressional_members_tool,
 )
+from ghostfolio_agent.tools.benchmark_comparison import create_benchmark_comparison_tool
 
 
 def create_tools(
@@ -41,6 +42,7 @@ def create_tools(
         create_stock_quote_tool(client, finnhub=finnhub),
         create_conviction_score_tool(finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional),
         create_morning_briefing_tool(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional),
+        create_benchmark_comparison_tool(client),
     ]
 
     if congressional is not None:
