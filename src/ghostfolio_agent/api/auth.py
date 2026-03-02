@@ -34,9 +34,9 @@ async def _validate_ghostfolio_token(token: str) -> bool:
     base_url = settings.ghostfolio_base_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # First, try using it as a Bearer JWT (test against a lightweight endpoint)
+            # First, try using it as a Bearer JWT (test against a known-working endpoint)
             resp = await client.get(
-                f"{base_url}/api/v1/user",
+                f"{base_url}/api/v1/portfolio/holdings",
                 headers={"Authorization": f"Bearer {token}"},
             )
             logger.info(
