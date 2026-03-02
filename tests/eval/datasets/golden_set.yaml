@@ -216,3 +216,15 @@
   difficulty: straightforward
   stage: golden_set
   description: Combined request for transaction history and current portfolio value
+
+- id: tc_055_congressional_trades_ticker
+  input: What are congress members trading in AAPL?
+  expected_tools: [congressional_trades]
+  expected_tool_output_contains: [AAPL, Congressional]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: congressional
+  complexity: single_tool
+  difficulty: straightforward
+  stage: golden_set
+  description: Direct congressional trades query for a specific ticker should call congressional_trades tool

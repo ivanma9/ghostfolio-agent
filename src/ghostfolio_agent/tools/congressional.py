@@ -45,11 +45,11 @@ def create_congressional_trades_tool(congressional: CongressionalClient):
         lines = [f"Congressional Trades ({total} total, last {days} days):", ""]
 
         for t in trades[:20]:
-            member_name = t.get("member", "Unknown")
-            t_ticker = t.get("ticker", "?")
-            t_type = t.get("transaction_type", "?")
-            amount = t.get("amount", "N/A")
-            t_date = t.get("date", "N/A")
+            member_name = t.get("member") or "Unknown"
+            t_ticker = t.get("ticker") or "?"
+            t_type = t.get("transaction_type") or "?"
+            amount = t.get("amount") or "N/A"
+            t_date = t.get("date") or "N/A"
             lines.append(f"  {t_date}  {member_name:20s}  {t_type:10s}  {t_ticker:6s}  {amount}")
 
         if total > 20:
@@ -86,10 +86,10 @@ def create_congressional_summary_tool(congressional: CongressionalClient):
         if total == 0:
             return f"No congressional trades found in the last {days} days."
 
-        buys = data.get("buys", 0)
-        sells = data.get("sells", 0)
-        unique = data.get("unique_members", 0)
-        sentiment = data.get("sentiment", "N/A")
+        buys = data.get("buys") or 0
+        sells = data.get("sells") or 0
+        unique = data.get("unique_members") or 0
+        sentiment = data.get("sentiment") or "N/A"
 
         header = "Congressional Trading Summary"
         if ticker:
@@ -130,8 +130,8 @@ def create_congressional_members_tool(congressional: CongressionalClient):
         lines = [f"Most Active Congressional Traders ({len(members)} shown):", ""]
 
         for m in members:
-            name = m.get("member", "Unknown")
-            count = m.get("trade_count", 0)
+            name = m.get("member") or "Unknown"
+            count = m.get("trade_count") or 0
             lines.append(f"  {name:30s}  {count} trades")
 
         if len(data) > 20:

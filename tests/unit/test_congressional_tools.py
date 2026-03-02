@@ -128,3 +128,80 @@ class TestCongressionalMembersTool:
         tool = create_congressional_members_tool(congressional_client)
         result = await tool.ainvoke({})
         assert "unavailable" in result.lower()
+
+
+class TestPartialData:
+    """Verify tools handle partial/missing fields gracefully via .get() defaults."""
+
+    @pytest.fixture(autouse=True)
+    def _client(self):
+        self.client = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_trades_missing_fields_in_entry(self):
+        """Trade with only 'member' key — other fields use .get() defaults."""
+        self.client.get_trades = AsyncMock(
+            return_value={"trades": [{"member": "Pelosi"}], "total": 1}
+        )
+        tool = create_congressional_trades_tool(self.client)
+        result = await tool.ainvoke({"ticker": "AAPL"})
+        assert "Pelosi" in result
+        assert "?" in result  # ticker default
+        assert "N/A" in result  # amount default
+
+    @pytest.mark.asyncio
+    async def test_trades_none_values_in_entry(self):
+        """All fields None — graceful formatting."""
+        self.client.get_trades = AsyncMock(
+            return_value={
+                "trades": [{"member": None, "ticker": None, "transaction_type": None, "amount": None, "date": None}],
+                "total": 1,
+            }
+        )
+        tool = create_congressional_trades_tool(self.client)
+        result = await tool.ainvoke({"ticker": "AAPL"})
+        # Should not crash — None values replaced by .get() defaults
+        assert "Congressional Trades" in result
+
+    @pytest.mark.asyncio
+    async def test_summary_missing_sentiment(self):
+        """No sentiment key — verify 'N/A' default."""
+        self.client.get_trades_summary = AsyncMock(
+            return_value={"total_trades": 3, "buys": 2, "sells": 1, "unique_members": 2}
+        )
+        tool = create_congressional_summary_tool(self.client)
+        result = await tool.ainvoke({"ticker": "AAPL"})
+        assert "N/A" in result
+
+    @pytest.mark.asyncio
+    async def test_summary_missing_buys_sells_keys(self):
+        """No buys/sells keys — verify defaults to 0."""
+        self.client.get_trades_summary = AsyncMock(
+            return_value={"total_trades": 5, "unique_members": 3, "sentiment": "Neutral"}
+        )
+        tool = create_congressional_summary_tool(self.client)
+        result = await tool.ainvoke({"ticker": "AAPL"})
+        assert "Buys:" in result
+        assert "Sells:" in result
+
+    @pytest.mark.asyncio
+    async def test_members_entry_missing_trade_count(self):
+        """Member missing trade_count — defaults to 0."""
+        self.client.get_members = AsyncMock(
+            return_value=[{"member": "Pelosi"}]
+        )
+        tool = create_congressional_members_tool(self.client)
+        result = await tool.ainvoke({})
+        assert "Pelosi" in result
+        assert "0 trades" in result
+
+    @pytest.mark.asyncio
+    async def test_members_entry_null_name(self):
+        """Member name is None — defaults to 'Unknown'."""
+        self.client.get_members = AsyncMock(
+            return_value=[{"member": None, "trade_count": 5}]
+        )
+        tool = create_congressional_members_tool(self.client)
+        result = await tool.ainvoke({})
+        assert "Unknown" in result
+        assert "5 trades" in result

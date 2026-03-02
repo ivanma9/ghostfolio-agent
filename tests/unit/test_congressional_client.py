@@ -5,7 +5,7 @@ import httpx
 import respx
 
 from ghostfolio_agent.clients.congressional import CongressionalClient
-from ghostfolio_agent.clients.exceptions import TransientError, APIError
+from ghostfolio_agent.clients.exceptions import TransientError, APIError, RateLimitError
 
 BASE_URL = "http://congressional-trading.railway.internal:8000"
 
@@ -165,4 +165,125 @@ class TestErrorHandling:
             return_value=httpx.Response(404, text="Not Found")
         )
         with pytest.raises(APIError):
+            await client.get_trades()
+
+
+class TestContractValidation:
+    """Verify the client passes through unexpected/partial API responses as-is."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_trades_missing_fields_in_entry(self, client):
+        """Trade entry missing keys — client returns dict as-is."""
+        body = {"trades": [{"member": "Pelosi"}], "total": 1}
+        respx.get(f"{BASE_URL}/api/v1/trades").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades()
+        assert result["trades"][0] == {"member": "Pelosi"}
+        assert "ticker" not in result["trades"][0]
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_summary_missing_buys_sells(self, client):
+        """Summary without buys/sells keys."""
+        body = {"total_trades": 3, "unique_members": 2, "sentiment": "Neutral"}
+        respx.get(f"{BASE_URL}/api/v1/trades/summary").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades_summary()
+        assert "buys" not in result
+        assert result["total_trades"] == 3
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_summary_null_sentiment(self, client):
+        """Sentiment is null."""
+        body = {"total_trades": 2, "buys": 1, "sells": 1, "sentiment": None}
+        respx.get(f"{BASE_URL}/api/v1/trades/summary").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades_summary()
+        assert result["sentiment"] is None
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_summary_empty_string_sentiment(self, client):
+        """Sentiment is empty string."""
+        body = {"total_trades": 2, "buys": 1, "sells": 1, "sentiment": ""}
+        respx.get(f"{BASE_URL}/api/v1/trades/summary").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades_summary()
+        assert result["sentiment"] == ""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_members_partial_entry(self, client):
+        """Member dict missing trade_count."""
+        body = [{"member": "Pelosi"}]
+        respx.get(f"{BASE_URL}/api/v1/members").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_members()
+        assert result[0] == {"member": "Pelosi"}
+        assert "trade_count" not in result[0]
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_members_null_member_name(self, client):
+        """Member name is null."""
+        body = [{"member": None, "trade_count": 5}]
+        respx.get(f"{BASE_URL}/api/v1/members").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_members()
+        assert result[0]["member"] is None
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_trades_empty_trade_fields(self, client):
+        """Trade with all empty strings."""
+        body = {
+            "trades": [{"member": "", "ticker": "", "transaction_type": "", "amount": "", "date": ""}],
+            "total": 1,
+        }
+        respx.get(f"{BASE_URL}/api/v1/trades").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades()
+        assert result["trades"][0]["member"] == ""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_summary_zero_total_nonzero_buys(self, client):
+        """buys=3, sells=2 but total_trades=0 (inconsistent)."""
+        body = {"total_trades": 0, "buys": 3, "sells": 2, "unique_members": 2, "sentiment": "Bullish"}
+        respx.get(f"{BASE_URL}/api/v1/trades/summary").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        result = await client.get_trades_summary()
+        assert result["total_trades"] == 0
+        assert result["buys"] == 3
+
+
+class TestRateLimitAndTimeout:
+    """Rate limit (429) and timeout error handling."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_429_raises_rate_limit_error(self, client):
+        respx.get(f"{BASE_URL}/api/v1/trades").mock(
+            return_value=httpx.Response(429, text="Too Many Requests")
+        )
+        with pytest.raises(RateLimitError):
+            await client.get_trades()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_timeout_raises_transient_error(self, client):
+        respx.get(f"{BASE_URL}/api/v1/trades").mock(
+            side_effect=httpx.ReadTimeout("read timed out")
+        )
+        with pytest.raises(TransientError):
             await client.get_trades()

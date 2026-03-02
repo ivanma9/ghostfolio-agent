@@ -213,6 +213,33 @@ class TestCongressionalScore:
         assert score is None
         assert "No congressional data" in explanation
 
+    def test_zero_buys_zero_sells_nonzero_total(self):
+        """total_trades=3 but buys=0, sells=0 → 50 (no breakdown)."""
+        data = {"total_trades": 3, "buys": 0, "sells": 0, "unique_members": 2}
+        score, explanation = compute_congressional_score(data)
+        assert score == 50
+        assert "no buy/sell breakdown" in explanation
+
+    def test_missing_buys_key(self):
+        """Missing 'buys' key → .get("buys", 0) defaults to 0."""
+        data = {"total_trades": 4, "sells": 2, "unique_members": 2}
+        score, explanation = compute_congressional_score(data)
+        # buys=0, sells=2 → ratio = 0/2 = 0 → score=0
+        assert score == 0
+
+    def test_missing_sells_key(self):
+        """Missing 'sells' key → .get("sells", 0) defaults to 0."""
+        data = {"total_trades": 4, "buys": 3, "unique_members": 2}
+        score, explanation = compute_congressional_score(data)
+        # buys=3, sells=0 → ratio = 3/3 = 1.0 → score=100
+        assert score == 100
+
+    def test_missing_unique_members_key(self):
+        """Missing unique_members → '?' in explanation."""
+        data = {"total_trades": 4, "buys": 2, "sells": 2}
+        score, explanation = compute_congressional_score(data)
+        assert "?" in explanation
+
 
 from ghostfolio_agent.tools.conviction_score import compute_composite, score_to_label
 
@@ -380,3 +407,72 @@ class TestConvictionScoreTool:
 
         # Should not crash, should indicate insufficient data or show partial results
         assert "down" not in result.lower()
+
+
+class TestWeightRedistributionEdgeCases:
+    """Edge cases for compute_composite weight redistribution."""
+
+    def test_congressional_only_component(self):
+        """Single component (congressional) gets 100% weight, score = its score."""
+        components = [
+            ("congressional", 80, "4 buys, 1 sell", 15),
+        ]
+        score, label, details = compute_composite(components)
+        assert score == 80
+        assert label == "Buy"
+        assert details[0]["weight"] == 100  # redistributed to 100%
+
+    def test_congressional_plus_earnings_only(self):
+        """2 components — verify redistributed percentages sum to 100."""
+        components = [
+            ("congressional", 70, "3 buys, 2 sells", 15),
+            ("earnings", 75, "No upcoming earnings", 10),
+        ]
+        score, label, details = compute_composite(components)
+        total_weight = sum(d["weight"] for d in details)
+        assert total_weight == 100
+        # 70*15 + 75*10 = 1050 + 750 = 1800 / 25 = 72
+        assert score == 72
+
+    @pytest.mark.asyncio
+    async def test_all_none_except_congressional_tool_output(self):
+        """Full tool integration: all other APIs error, congressional + earnings return data."""
+        finnhub = MagicMock()
+        finnhub.get_analyst_recommendations = AsyncMock(side_effect=RuntimeError("down"))
+        finnhub.get_earnings_calendar = AsyncMock(return_value=[])
+        finnhub.get_quote = AsyncMock(side_effect=RuntimeError("down"))
+
+        alpha_vantage = MagicMock()
+        alpha_vantage.get_news_sentiment = AsyncMock(side_effect=RuntimeError("down"))
+
+        fmp = MagicMock()
+        fmp.get_price_target_consensus = AsyncMock(side_effect=RuntimeError("down"))
+
+        congressional = MagicMock()
+        congressional.get_trades_summary = AsyncMock(
+            return_value={"total_trades": 5, "buys": 4, "sells": 1, "unique_members": 3}
+        )
+
+        tool = create_conviction_score_tool(
+            finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional
+        )
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Conviction Score" in result
+        assert "/100" in result
+        # Congressional and Earnings should be present, others N/A
+        assert "Congressional Sentiment" in result
+        assert "Earnings Proximity" in result
+
+    def test_congressional_plus_analyst_plus_earnings(self):
+        """3 components — verify sum of weights ≈ 100%."""
+        components = [
+            ("analyst", 85, "20 of 24 bullish", 35),
+            ("congressional", 60, "3 buys, 3 sells", 15),
+            ("earnings", 75, "No upcoming earnings", 10),
+        ]
+        score, label, details = compute_composite(components)
+        total_weight = sum(d["weight"] for d in details)
+        assert total_weight == 100
+        # (85*35 + 60*15 + 75*10) / 60 = (2975 + 900 + 750) / 60 = 77.08 → 77
+        assert 76 <= score <= 78

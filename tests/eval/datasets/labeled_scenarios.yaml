@@ -449,3 +449,53 @@
   difficulty: ambiguous
   stage: labeled_scenario
   description: Agent may use portfolio_summary or holding_detail for cost basis; routing is ambiguous
+
+# ── Congressional Trading ────────────────────────────────────────────────────
+
+- id: tc_056_congressional_summary
+  input: Give me a summary of congressional trading activity
+  expected_tools: [congressional_trades_summary]
+  expected_tool_output_contains: [Congressional, Trades]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: congressional
+  complexity: single_tool
+  difficulty: straightforward
+  stage: labeled_scenario
+  description: Summary request should route to congressional_trades_summary tool
+
+- id: tc_057_congressional_members
+  input: Who are the most active congressional traders?
+  expected_tools: [congressional_members]
+  expected_tool_output_contains: [Congressional, trades]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: congressional
+  complexity: single_tool
+  difficulty: straightforward
+  stage: labeled_scenario
+  description: Active traders query should route to congressional_members tool
+
+- id: tc_058_congressional_ambiguous_pelosi
+  input: What has Pelosi been buying?
+  expected_tools: [congressional_trades]
+  expected_tool_output_contains: [Congressional]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: congressional
+  complexity: single_tool
+  difficulty: ambiguous
+  stage: labeled_scenario
+  description: Pelosi buying query should route to congressional_trades with member filter
+
+- id: tc_059_congressional_ambiguous_general
+  input: Are politicians bullish on tech?
+  expected_tools: [congressional_trades_summary]
+  expected_tool_output_contains: [Congressional]
+  expected_output_contains: []
+  expected_output_not_contains: []
+  category: congressional
+  complexity: single_tool
+  difficulty: ambiguous
+  stage: labeled_scenario
+  description: General political sentiment query should route to congressional_trades_summary
