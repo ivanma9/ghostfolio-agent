@@ -1,9 +1,13 @@
 """AlertEngine — detects notable portfolio conditions and enforces per-key cooldowns."""
 
 import asyncio
+import json
+import os
 import time
 import structlog
 from datetime import date
+from pathlib import Path
+from filelock import FileLock
 from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
@@ -25,6 +29,8 @@ from ghostfolio_agent.tools.conviction_score import (
 )
 
 COOLDOWN_TTL = 86400  # 24 hours in seconds
+_COOLDOWN_PATH = Path("data/alert_cooldowns.json")
+_COOLDOWN_LOCK = Path("data/alert_cooldowns.lock")
 
 logger = structlog.get_logger()
 
@@ -41,9 +47,40 @@ async def _safe_fetch(coro, label: str):
 class AlertEngine:
     """Checks portfolio holdings for notable conditions with cooldown suppression."""
 
-    def __init__(self) -> None:
+    def __init__(self, cooldown_path: Path | None = None) -> None:
+        self._cooldown_path = cooldown_path or _COOLDOWN_PATH
+        self._cooldown_lock = Path(str(self._cooldown_path) + ".lock")
         # Maps alert key → unix timestamp when it was last fired
-        self._fired: dict[str, float] = {}
+        self._fired: dict[str, float] = self._load_cooldowns()
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+
+    def _load_cooldowns(self) -> dict[str, float]:
+        """Load cooldown state from JSON file. Returns {} on any error."""
+        try:
+            if not self._cooldown_path.exists():
+                return {}
+            os.makedirs(self._cooldown_path.parent, exist_ok=True)
+            with FileLock(self._cooldown_lock, timeout=10):
+                data = json.loads(self._cooldown_path.read_text())
+                if isinstance(data, dict):
+                    return {k: float(v) for k, v in data.items()}
+        except Exception as exc:
+            logger.warning("cooldown_load_failed", error=str(exc))
+        return {}
+
+    def _save_cooldowns(self) -> None:
+        """Persist cooldown state to JSON file."""
+        try:
+            os.makedirs(self._cooldown_path.parent, exist_ok=True)
+            with FileLock(self._cooldown_lock, timeout=10):
+                tmp = self._cooldown_path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(self._fired))
+                os.replace(str(tmp), str(self._cooldown_path))
+        except Exception as exc:
+            logger.warning("cooldown_save_failed", error=str(exc))
 
     # ------------------------------------------------------------------
     # Cooldown helpers
@@ -64,6 +101,7 @@ class AlertEngine:
         expired = [k for k, ts in self._fired.items() if (now - ts) >= COOLDOWN_TTL]
         for k in expired:
             del self._fired[k]
+        self._save_cooldowns()
 
     # ------------------------------------------------------------------
     # Alert condition functions

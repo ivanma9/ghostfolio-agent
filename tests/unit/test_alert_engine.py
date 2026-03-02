@@ -1,8 +1,10 @@
-"""Tests for AlertEngine — cooldown logic, condition checks, low conviction."""
+"""Tests for AlertEngine — cooldown logic, condition checks, low conviction, persistence."""
 
+import json
 import time
 import pytest
 from datetime import date, timedelta
+from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from ghostfolio_agent.alerts.engine import (
@@ -410,3 +412,49 @@ class TestCheckAlertsWithCongressional:
         # Congressional alert for TSLA
         assert "TSLA" in alert_text
         assert "congressional" in alert_text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — Cooldown Persistence
+# ---------------------------------------------------------------------------
+
+class TestCooldownPersistence:
+    def test_persist_and_load_roundtrip(self, tmp_path):
+        """Cooldowns saved by one engine are loaded by a new engine instance."""
+        cooldown_file = tmp_path / "cooldowns.json"
+        engine1 = AlertEngine(cooldown_path=cooldown_file)
+        engine1._record("AAPL:earnings")
+        engine1._record("TSLA:big_mover")
+
+        # New instance should load persisted state
+        engine2 = AlertEngine(cooldown_path=cooldown_file)
+        assert engine2._is_cooled_down("AAPL:earnings") is False
+        assert engine2._is_cooled_down("TSLA:big_mover") is False
+        assert engine2._is_cooled_down("NVDA:earnings") is True
+
+    def test_corrupted_file_graceful_fallback(self, tmp_path):
+        """Corrupted JSON file results in empty cooldowns, no crash."""
+        cooldown_file = tmp_path / "cooldowns.json"
+        cooldown_file.write_text("NOT VALID JSON {{{")
+
+        engine = AlertEngine(cooldown_path=cooldown_file)
+        assert engine._fired == {}
+        assert engine._is_cooled_down("AAPL:earnings") is True
+
+    def test_missing_file_starts_fresh(self, tmp_path):
+        """Missing cooldown file starts with empty state."""
+        cooldown_file = tmp_path / "nonexistent" / "cooldowns.json"
+        engine = AlertEngine(cooldown_path=cooldown_file)
+        assert engine._fired == {}
+
+    def test_record_saves_to_disk(self, tmp_path):
+        """Each _record() call persists state to disk."""
+        cooldown_file = tmp_path / "cooldowns.json"
+        engine = AlertEngine(cooldown_path=cooldown_file)
+        engine._record("AAPL:earnings")
+
+        # Verify file was written
+        assert cooldown_file.exists()
+        data = json.loads(cooldown_file.read_text())
+        assert "AAPL:earnings" in data
+        assert isinstance(data["AAPL:earnings"], float)

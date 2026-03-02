@@ -30,11 +30,6 @@ class FMPClient(BaseClient):
             merged.update(params)
         return await self._request("GET", f"{self._base_url}{path}", params=merged)
 
-    async def get_analyst_estimates(self, symbol: str) -> list[dict[str, Any]]:
-        """Get analyst estimates (revenue, EPS forecasts) for a symbol. Annual period."""
-        result = await self._get("/analyst-estimates", params={"symbol": symbol, "period": "annual"})
-        return cast(list[dict[str, Any]], result if isinstance(result, list) else [])
-
     async def get_price_target_consensus(self, symbol: str) -> list[dict[str, Any]]:
         """Get analyst price target consensus (high, low, median, consensus)."""
         result = await self._get("/price-target-consensus", params={"symbol": symbol})

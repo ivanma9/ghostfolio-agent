@@ -5,7 +5,7 @@ import { useChat } from './hooks/useChat'
 import { useSidebar } from './hooks/useSidebar'
 
 function App() {
-  const [selectedModel, setSelectedModel] = useState('anthropic/claude-sonnet-4')
+  const [selectedModel, setSelectedModel] = useState('')
   const [isPaperTrading, setIsPaperTrading] = useState(false)
 
   const sidebar = useSidebar(isPaperTrading)

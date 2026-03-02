@@ -21,7 +21,7 @@ from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.config import get_settings
-from ghostfolio_agent.verification.pipeline import run_verification_pipeline
+from ghostfolio_agent.verification.pipeline import run_verification_pipeline, PipelineResult
 from ghostfolio_agent.alerts.engine import AlertEngine
 
 router = APIRouter()
@@ -31,6 +31,10 @@ _client: GhostfolioClient | None = None
 _checkpointer: AsyncSqliteSaver | None = None
 _agents: dict[str, object] = {}  # model_name -> agent
 _alert_engine: AlertEngine | None = None
+_finnhub: FinnhubClient | None = None
+_alpha_vantage: AlphaVantageClient | None = None
+_fmp: FMPClient | None = None
+_congressional: CongressionalClient | None = None
 
 
 def _get_alert_engine() -> AlertEngine:
@@ -51,6 +55,42 @@ def _get_client() -> GhostfolioClient:
     return _client
 
 
+def _get_finnhub() -> FinnhubClient | None:
+    global _finnhub
+    if _finnhub is None:
+        settings = get_settings()
+        if settings.finnhub_api_key:
+            _finnhub = FinnhubClient(api_key=settings.finnhub_api_key)
+    return _finnhub
+
+
+def _get_alpha_vantage() -> AlphaVantageClient | None:
+    global _alpha_vantage
+    if _alpha_vantage is None:
+        settings = get_settings()
+        if settings.alpha_vantage_api_key:
+            _alpha_vantage = AlphaVantageClient(api_key=settings.alpha_vantage_api_key)
+    return _alpha_vantage
+
+
+def _get_fmp() -> FMPClient | None:
+    global _fmp
+    if _fmp is None:
+        settings = get_settings()
+        if settings.fmp_api_key:
+            _fmp = FMPClient(api_key=settings.fmp_api_key)
+    return _fmp
+
+
+def _get_congressional() -> CongressionalClient | None:
+    global _congressional
+    if _congressional is None:
+        settings = get_settings()
+        if settings.congressional_api_url:
+            _congressional = CongressionalClient(base_url=settings.congressional_api_url)
+    return _congressional
+
+
 _DB_PATH = "data/checkpoints.db"
 
 
@@ -69,10 +109,6 @@ async def _get_agent(model_name: str = DEFAULT_MODEL):
     global _agents
     if model_name not in _agents:
         settings = get_settings()
-        finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
-        alpha_vantage = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
-        fmp = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
-        congressional = CongressionalClient(base_url=settings.congressional_api_url) if settings.congressional_api_url else None
         checkpointer = await _get_checkpointer()
         _agents[model_name] = create_agent(
             _get_client(),
@@ -81,10 +117,10 @@ async def _get_agent(model_name: str = DEFAULT_MODEL):
             model_name=model_name,
             checkpointer=checkpointer,
             max_context_messages=settings.max_context_messages,
-            finnhub=finnhub,
-            alpha_vantage=alpha_vantage,
-            fmp=fmp,
-            congressional=congressional,
+            finnhub=_get_finnhub(),
+            alpha_vantage=_get_alpha_vantage(),
+            fmp=_get_fmp(),
+            congressional=_get_congressional(),
         )
     return _agents[model_name]
 
@@ -275,15 +311,10 @@ async def chat(request: ChatRequest):
 
         # Run alert check
         alert_engine = _get_alert_engine()
-        settings = get_settings()
-        finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
-        alpha_vantage_client = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
-        fmp_client = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
-        congressional_client = CongressionalClient(base_url=settings.congressional_api_url) if settings.congressional_api_url else None
 
         try:
             alerts = await alert_engine.check_alerts(
-                _get_client(), finnhub=finnhub, alpha_vantage=alpha_vantage_client, fmp=fmp_client, congressional=congressional_client
+                _get_client(), finnhub=_get_finnhub(), alpha_vantage=_get_alpha_vantage(), fmp=_get_fmp(), congressional=_get_congressional()
             )
         except Exception as e:
             logger.warning("alert_check_failed", error=str(e))
@@ -355,24 +386,30 @@ async def chat(request: ChatRequest):
         # Build citations from tool call results
         citations = _extract_citations(response_messages)
 
-        # Run full verification pipeline
-        client = _get_client()
-        pipeline_result = await run_verification_pipeline(
-            response_text=ai_response,
-            tool_outputs=tool_outputs,
-            client=client if ai_response else None,
-        )
-
-        # Build per-verifier confidence details
+        # Run full verification pipeline (skip for no-tool queries like greetings)
         verification_details: dict[str, str] = {}
-        if pipeline_result.numerical:
-            verification_details["numerical"] = pipeline_result.numerical.confidence
-        if pipeline_result.hallucination:
-            verification_details["hallucination"] = pipeline_result.hallucination.confidence
-        if pipeline_result.output_validation:
-            verification_details["output_validation"] = pipeline_result.output_validation.confidence
-        if pipeline_result.domain_constraints:
-            verification_details["domain_constraints"] = pipeline_result.domain_constraints.confidence
+        if tool_calls_made:
+            client = _get_client()
+            pipeline_result = await run_verification_pipeline(
+                response_text=ai_response,
+                tool_outputs=tool_outputs,
+                client=client if ai_response else None,
+            )
+
+            # Build per-verifier confidence details
+            if pipeline_result.numerical:
+                verification_details["numerical"] = pipeline_result.numerical.confidence
+            if pipeline_result.hallucination:
+                verification_details["hallucination"] = pipeline_result.hallucination.confidence
+            if pipeline_result.output_validation:
+                verification_details["output_validation"] = pipeline_result.output_validation.confidence
+            if pipeline_result.domain_constraints:
+                verification_details["domain_constraints"] = pipeline_result.domain_constraints.confidence
+        else:
+            pipeline_result = PipelineResult(
+                overall_confidence="high",
+                response_text=ai_response,
+            )
 
         return ChatResponse(
             response=pipeline_result.response_text,
