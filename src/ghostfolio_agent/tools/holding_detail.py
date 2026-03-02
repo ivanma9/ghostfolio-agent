@@ -239,8 +239,14 @@ def create_holding_detail_tool(
             if not items:
                 return f"Could not find symbol '{symbol}'. Please check the ticker and try again."
 
-            data_source = items[0].get("dataSource", "YAHOO")
-            resolved_symbol = items[0].get("symbol", symbol)
+            # Prefer stock (YAHOO) over crypto (COINGECKO) results
+            best = items[0]
+            for item in items:
+                if item.get("dataSource") == "YAHOO":
+                    best = item
+                    break
+            data_source = best.get("dataSource", "YAHOO")
+            resolved_symbol = best.get("symbol", symbol)
 
             holding = await client.get_holding(data_source, resolved_symbol)
         except Exception as e:

@@ -120,7 +120,8 @@ def create_paper_trade_tool(client: GhostfolioClient):
                         lookup = await client.lookup_symbol(sym)
                         items = lookup.get("items", [])
                         if items:
-                            ds = items[0].get("dataSource", "YAHOO")
+                            best = next((i for i in items if i.get("dataSource") == "YAHOO"), items[0])
+                            ds = best.get("dataSource", "YAHOO")
                             sym_data = await client.get_symbol(ds, sym)
                             current_price = sym_data.get("marketPrice", avg_cost) or avg_cost
                     except Exception as e:
