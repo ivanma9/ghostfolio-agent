@@ -183,17 +183,15 @@ export default function CommandPalette({
       onKeyDown={handleKeyDown}
     >
       {showFilter && (
-        <div className="px-3 pt-3 pb-2 border-b border-gray-100">
-          <input
-            ref={filterInputRef}
-            type="text"
-            value={filter}
-            onChange={(e) => onFilterChange(e.target.value)}
-            placeholder="Search commands..."
-            className="w-full text-sm text-gray-700 placeholder-gray-400 outline-none bg-transparent"
-            onKeyDown={handleKeyDown}
-          />
-        </div>
+        <input
+          ref={filterInputRef}
+          type="text"
+          value={filter}
+          onChange={(e) => onFilterChange(e.target.value)}
+          placeholder="Search commands..."
+          className="w-full text-sm px-3 py-2 border-b border-gray-100 outline-none placeholder-gray-400"
+          onKeyDown={handleKeyDown}
+        />
       )}
 
       <div className="py-1.5">
@@ -202,7 +200,7 @@ export default function CommandPalette({
         ) : (
           filteredCategories.map((cat) => (
             <div key={cat.name}>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              <div className="flex items-center gap-1.5 px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                 <span className="text-gray-300">{cat.icon}</span>
                 {cat.name}
               </div>
@@ -212,8 +210,8 @@ export default function CommandPalette({
                 return (
                   <button
                     key={item.label}
-                    className={`w-full flex items-start gap-2.5 px-3 py-2 text-left transition-colors ${
-                      isActive ? 'bg-slate-50/80' : 'hover:bg-slate-50/60'
+                    className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-lg text-left transition-colors duration-150 cursor-pointer ${
+                      isActive ? 'bg-slate-50/60' : 'hover:bg-slate-50/60'
                     }`}
                     onMouseEnter={() => setActiveIndex(currentIndex)}
                     onClick={() => selectItem(item)}
