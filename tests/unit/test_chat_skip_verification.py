@@ -25,17 +25,23 @@ def mock_agent():
     return agent
 
 
+# Default user returned when auth is disabled
+_DEFAULT_USER = {"id": "default", "role": "admin"}
+
+
 async def test_skip_verification_for_no_tool_queries(chat_request, mock_agent):
     """When agent uses no tools, verification pipeline should not run."""
     with (
-        patch("ghostfolio_agent.api.chat._get_agent", return_value=mock_agent),
+        patch("ghostfolio_agent.api.chat._require_user", return_value=_DEFAULT_USER),
+        patch("ghostfolio_agent.api.chat._get_user_client", return_value=AsyncMock()),
+        patch("ghostfolio_agent.api.chat._create_agent_for_request", return_value=mock_agent),
         patch("ghostfolio_agent.api.chat._get_alert_engine") as mock_alert,
         patch("ghostfolio_agent.api.chat.run_verification_pipeline") as mock_verify,
     ):
         mock_alert.return_value.check_alerts = AsyncMock(return_value=[])
 
         from ghostfolio_agent.api.chat import chat
-        response = await chat(chat_request)
+        response = await chat(chat_request, user=_DEFAULT_USER)
 
         mock_verify.assert_not_called()
         assert response.confidence == "high"
@@ -61,16 +67,20 @@ async def test_runs_verification_when_tools_used(chat_request, mock_agent):
         response_text="Your portfolio is worth $10,000.",
     )
 
+    mock_client = AsyncMock()
+
     with (
-        patch("ghostfolio_agent.api.chat._get_agent", return_value=mock_agent),
+        patch("ghostfolio_agent.api.chat._require_user", return_value=_DEFAULT_USER),
+        patch("ghostfolio_agent.api.chat._get_user_client", return_value=mock_client),
+        patch("ghostfolio_agent.api.chat._create_agent_for_request", return_value=mock_agent),
         patch("ghostfolio_agent.api.chat._get_alert_engine") as mock_alert,
         patch("ghostfolio_agent.api.chat.run_verification_pipeline", return_value=mock_pipeline_result) as mock_verify,
-        patch("ghostfolio_agent.api.chat._get_client") as mock_client,
+        patch("ghostfolio_agent.api.chat._get_client") as mock_get_client,
     ):
         mock_alert.return_value.check_alerts = AsyncMock(return_value=[])
 
         from ghostfolio_agent.api.chat import chat
-        response = await chat(chat_request)
+        response = await chat(chat_request, user=_DEFAULT_USER)
 
         mock_verify.assert_called_once()
         assert response.confidence == "high"

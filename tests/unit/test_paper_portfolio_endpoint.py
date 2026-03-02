@@ -1,29 +1,43 @@
 """Tests for GET /api/paper-portfolio endpoint."""
 
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 from ghostfolio_agent.api.chat import get_paper_portfolio
 from ghostfolio_agent.tools.paper_trade import _STARTING_CASH
 
+# Default user for tests (auth disabled mode)
+_DEFAULT_USER = {"id": "default", "role": "admin"}
+
 
 @pytest.fixture(autouse=True)
 def mock_client():
-    """Mock the GhostfolioClient used by the endpoint."""
+    """Mock the GhostfolioClient used by the endpoint for price lookups."""
     mock = AsyncMock()
     with patch("ghostfolio_agent.api.chat._get_client", return_value=mock):
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def mock_user_client(mock_client):
+    """Mock _get_user_client to return the same mock client."""
+    async def _side_effect(user):
+        return mock_client
+    with patch("ghostfolio_agent.api.chat._get_user_client", side_effect=_side_effect):
+        yield
+
+
 class TestPaperPortfolioEndpoint:
     async def test_empty_portfolio(self, mock_client):
         """Empty portfolio returns cash=$100K, no positions."""
-        with patch("ghostfolio_agent.api.chat.load_portfolio", return_value={
+        mock_db = AsyncMock()
+        mock_db.get_paper_portfolio = AsyncMock(return_value={
             "cash": _STARTING_CASH,
             "positions": {},
             "trades": [],
-        }):
-            result = await get_paper_portfolio()
+        })
+        with patch("ghostfolio_agent.api.chat._get_auth_db", return_value=mock_db):
+            result = await get_paper_portfolio(user=_DEFAULT_USER)
 
         assert result.cash == _STARTING_CASH
         assert result.total_value == _STARTING_CASH
@@ -42,15 +56,17 @@ class TestPaperPortfolioEndpoint:
             {"marketPrice": 400.0},  # MSFT current price
         ])
 
-        with patch("ghostfolio_agent.api.chat.load_portfolio", return_value={
+        mock_db = AsyncMock()
+        mock_db.get_paper_portfolio = AsyncMock(return_value={
             "cash": 80000.0,
             "positions": {
                 "AAPL": {"quantity": 50, "avg_cost": 150.0},
                 "MSFT": {"quantity": 25, "avg_cost": 350.0},
             },
             "trades": [],
-        }):
-            result = await get_paper_portfolio()
+        })
+        with patch("ghostfolio_agent.api.chat._get_auth_db", return_value=mock_db):
+            result = await get_paper_portfolio(user=_DEFAULT_USER)
 
         assert result.cash == 80000.0
         # AAPL: 50 * 200 = 10000, MSFT: 25 * 400 = 10000
@@ -82,14 +98,16 @@ class TestPaperPortfolioEndpoint:
         """When live price lookup fails, falls back to avg_cost."""
         mock_client.lookup_symbol = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("ghostfolio_agent.api.chat.load_portfolio", return_value={
+        mock_db = AsyncMock()
+        mock_db.get_paper_portfolio = AsyncMock(return_value={
             "cash": 90000.0,
             "positions": {
                 "AAPL": {"quantity": 10, "avg_cost": 150.0},
             },
             "trades": [],
-        }):
-            result = await get_paper_portfolio()
+        })
+        with patch("ghostfolio_agent.api.chat._get_auth_db", return_value=mock_db):
+            result = await get_paper_portfolio(user=_DEFAULT_USER)
 
         assert len(result.positions) == 1
         assert result.positions[0].current_price == 150.0  # fallback to avg_cost
