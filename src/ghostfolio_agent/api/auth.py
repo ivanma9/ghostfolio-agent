@@ -25,14 +25,26 @@ async def _get_auth_db() -> AuthDB:
 
 
 async def _validate_ghostfolio_token(token: str) -> bool:
-    """Validate a Ghostfolio security token by calling the auth endpoint."""
+    """Validate a Ghostfolio token — supports both security tokens and Bearer JWTs.
+
+    Security tokens are short strings exchanged via POST /auth/anonymous.
+    Bearer JWTs (start with 'eyJ') are used directly as Authorization headers.
+    """
     settings = get_settings()
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # First, try using it as a Bearer JWT (test against a lightweight endpoint)
+            resp = await client.get(
+                f"{settings.ghostfolio_base_url}/api/v1/user",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if resp.status_code == 200:
+                return True
+
+            # If that fails, try exchanging as a security token
             resp = await client.post(
                 f"{settings.ghostfolio_base_url}/api/v1/auth/anonymous",
                 json={"accessToken": token},
-                timeout=10.0,
             )
             return resp.status_code == 201
     except Exception as e:
