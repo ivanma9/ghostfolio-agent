@@ -162,7 +162,7 @@ def _make_context_trimmer(max_messages: int = 40):
 
 
 def create_agent(
-    client: GhostfolioClient,
+    client: GhostfolioClient | None,
     openrouter_api_key: str = "",
     openai_api_key: str = "",
     model_name: str = DEFAULT_MODEL,

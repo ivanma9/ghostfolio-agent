@@ -23,13 +23,40 @@ from ghostfolio_agent.tools.benchmark_comparison import create_benchmark_compari
 
 
 def create_tools(
-    client: GhostfolioClient,
+    client: GhostfolioClient | None,
     finnhub: FinnhubClient | None = None,
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
     congressional: CongressionalClient | None = None,
 ) -> list:
-    """Create all agent tools with the given clients."""
+    """Create agent tools. When client is None (guest mode), only include guest-safe tools."""
+    if client is None:
+        # Guest mode — only tools that don't require a Ghostfolio portfolio
+        tools = []
+
+        # paper_trade works without a Ghostfolio client (uses local file/DB)
+        tools.append(create_paper_trade_tool(client))
+
+        if finnhub is not None:
+            tools.append(create_stock_quote_tool(client, finnhub=finnhub))
+
+        if finnhub is not None or alpha_vantage is not None or fmp is not None:
+            tools.append(
+                create_conviction_score_tool(
+                    finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional
+                )
+            )
+
+        if congressional is not None:
+            tools.extend([
+                create_congressional_trades_tool(congressional),
+                create_congressional_summary_tool(congressional),
+                create_congressional_members_tool(congressional),
+            ])
+
+        return tools
+
+    # Full mode — client is available
     tools = [
         create_portfolio_summary_tool(client),
         create_transaction_history_tool(client),

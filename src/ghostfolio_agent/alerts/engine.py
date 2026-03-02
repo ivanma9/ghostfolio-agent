@@ -204,6 +204,7 @@ class AlertEngine:
     async def check_alerts(
         self,
         client: GhostfolioClient,
+        user_id: str = "default",
         finnhub: FinnhubClient | None = None,
         alpha_vantage: AlphaVantageClient | None = None,
         fmp: FMPClient | None = None,

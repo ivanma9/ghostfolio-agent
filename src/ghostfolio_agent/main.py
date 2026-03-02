@@ -10,6 +10,7 @@ import structlog
 from ghostfolio_agent.config import get_settings
 from ghostfolio_agent.logging_config import configure_logging
 from ghostfolio_agent.api.chat import router as chat_router
+from ghostfolio_agent.api.auth import router as auth_router
 from ghostfolio_agent.api.middleware import RequestLoggingMiddleware
 
 STATIC_DIR = pathlib.Path(__file__).resolve().parent.parent.parent / "static"
@@ -24,6 +25,8 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("starting ghostfolio-agent", port=settings.agent_port)
+    from ghostfolio_agent.api.auth import _get_auth_db
+    await _get_auth_db()
     yield
     logger.info("shutting down ghostfolio-agent")
 
@@ -47,6 +50,7 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(chat_router)
+app.include_router(auth_router)
 
 
 @app.exception_handler(Exception)

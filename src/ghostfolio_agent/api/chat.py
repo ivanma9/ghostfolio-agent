@@ -4,14 +4,16 @@ import re
 
 import aiosqlite
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from ghostfolio_agent.models.api import AlertItem, Citation, ChatRequest, ChatResponse, PaperPositionResponse, PaperPortfolioResponse, PortfolioPositionResponse, PortfolioResponse
-from ghostfolio_agent.tools.paper_trade import load_portfolio, _STARTING_CASH
+from ghostfolio_agent.tools.paper_trade import _STARTING_CASH
+from ghostfolio_agent.auth.middleware import get_current_user
+from ghostfolio_agent.api.auth import _get_auth_db
 
 logger = structlog.get_logger()
 from ghostfolio_agent.agent.graph import create_agent, AVAILABLE_MODELS, DEFAULT_MODEL
@@ -38,7 +40,6 @@ _ALERT_SEVERITY: dict[str, str] = {
 # Shared state
 _client: GhostfolioClient | None = None
 _checkpointer: AsyncSqliteSaver | None = None
-_agents: dict[str, object] = {}  # model_name -> agent
 _alert_engine: AlertEngine | None = None
 _finnhub: FinnhubClient | None = None
 _alpha_vantage: AlphaVantageClient | None = None
@@ -114,24 +115,47 @@ async def _get_checkpointer() -> AsyncSqliteSaver:
     return _checkpointer
 
 
-async def _get_agent(model_name: str = DEFAULT_MODEL):
-    global _agents
-    if model_name not in _agents:
-        settings = get_settings()
-        checkpointer = await _get_checkpointer()
-        _agents[model_name] = create_agent(
-            _get_client(),
-            openrouter_api_key=settings.openrouter_api_key,
-            openai_api_key=settings.openai_api_key,
-            model_name=model_name,
-            checkpointer=checkpointer,
-            max_context_messages=settings.max_context_messages,
-            finnhub=_get_finnhub(),
-            alpha_vantage=_get_alpha_vantage(),
-            fmp=_get_fmp(),
-            congressional=_get_congressional(),
-        )
-    return _agents[model_name]
+async def _require_user(authorization: str | None = Header(None)) -> dict:
+    """FastAPI dependency — extracts authenticated user from JWT."""
+    settings = get_settings()
+    if not settings.jwt_secret:
+        # Auth disabled (no JWT_SECRET configured) — return default admin user
+        return {"id": "default", "role": "admin"}
+    db = await _get_auth_db()
+    return await get_current_user(authorization, settings.jwt_secret, db)
+
+
+async def _get_user_client(user: dict) -> GhostfolioClient | None:
+    """Get GhostfolioClient for the given user. Returns None for guests."""
+    if user["role"] == "guest":
+        return None
+    if user["id"] == "default":
+        # Auth disabled — use env token
+        return _get_client()
+    db = await _get_auth_db()
+    token = await db.get_decrypted_token(user["id"])
+    if not token:
+        return None
+    settings = get_settings()
+    return GhostfolioClient(base_url=settings.ghostfolio_base_url, access_token=token)
+
+
+async def _create_agent_for_request(model_name: str, client: GhostfolioClient | None):
+    """Create a fresh agent for the given user's client. Not cached — each user gets their own."""
+    settings = get_settings()
+    checkpointer = await _get_checkpointer()
+    return create_agent(
+        client,
+        openrouter_api_key=settings.openrouter_api_key,
+        openai_api_key=settings.openai_api_key,
+        model_name=model_name,
+        checkpointer=checkpointer,
+        max_context_messages=settings.max_context_messages,
+        finnhub=_get_finnhub(),
+        alpha_vantage=_get_alpha_vantage(),
+        fmp=_get_fmp(),
+        congressional=_get_congressional(),
+    )
 
 
 def _extract_citations(messages: list) -> list[Citation]:
@@ -182,10 +206,14 @@ async def list_models():
 
 
 @router.get("/api/portfolio", response_model=PortfolioResponse)
-async def get_portfolio():
+async def get_portfolio(user: dict = Depends(_require_user)):
     """Return real portfolio holdings with daily change — no LLM call needed."""
+    if user["role"] == "guest":
+        raise HTTPException(status_code=403, detail="Connect your Ghostfolio portfolio to access this feature.")
+    client = await _get_user_client(user)
+    if not client:
+        raise HTTPException(status_code=403, detail="No portfolio connected.")
     try:
-        client = _get_client()
         holdings_data, perf_data = await asyncio.gather(
             client.get_portfolio_holdings(),
             client.get_portfolio_performance("1d"),
@@ -229,14 +257,20 @@ async def get_portfolio():
 
 
 @router.get("/api/paper-portfolio", response_model=PaperPortfolioResponse)
-async def get_paper_portfolio():
+async def get_paper_portfolio(user: dict = Depends(_require_user)):
     """Return paper portfolio with live prices — no LLM call needed."""
     try:
-        portfolio = load_portfolio()
+        db = await _get_auth_db()
+        portfolio = await db.get_paper_portfolio(user["id"])
         cash = portfolio.get("cash", _STARTING_CASH)
         positions_raw = portfolio.get("positions", {})
 
-        client = _get_client()
+        # For price lookups, guests need a fallback client
+        # Use admin env token just for price lookups if user has no client
+        price_client = await _get_user_client(user)
+        if not price_client:
+            price_client = _get_client()
+        client = price_client
         positions: list[PaperPositionResponse] = []
         total_position_value = 0.0
 
@@ -299,11 +333,12 @@ async def get_paper_portfolio():
 
 
 @router.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    logger.info("chat_request", session_id=request.session_id, model=request.model)
+async def chat(request: ChatRequest, user: dict = Depends(_require_user)):
+    logger.info("chat_request", session_id=request.session_id, model=request.model, user_id=user["id"], role=user["role"])
     try:
         model = request.model or DEFAULT_MODEL
-        agent = await _get_agent(model)
+        client = await _get_user_client(user)
+        agent = await _create_agent_for_request(model, client)
 
         # Wrap message with paper trading instruction if enabled
         content = request.message
@@ -318,16 +353,18 @@ async def chat(request: ChatRequest):
                 f"User message: {request.message}"
             )
 
-        # Run alert check
+        # Alert check — only for users with portfolio
         alert_engine = _get_alert_engine()
-
-        try:
-            alerts = await alert_engine.check_alerts(
-                _get_client(), finnhub=_get_finnhub(), alpha_vantage=_get_alpha_vantage(), fmp=_get_fmp(), congressional=_get_congressional()
-            )
-        except Exception as e:
-            logger.warning("alert_check_failed", error=str(e))
-            alerts = []
+        alerts = []
+        if client:  # Skip alert check for guests (no portfolio)
+            try:
+                alerts = await alert_engine.check_alerts(
+                    client, user_id=user["id"],
+                    finnhub=_get_finnhub(), alpha_vantage=_get_alpha_vantage(),
+                    fmp=_get_fmp(), congressional=_get_congressional()
+                )
+            except Exception as e:
+                logger.warning("alert_check_failed", error=str(e))
 
         structured_alerts: list[AlertItem] = []
         if alerts:
@@ -343,8 +380,15 @@ async def chat(request: ChatRequest):
                 for a in alerts
             ]
 
-        # Checkpointer manages history per thread_id — only send the new message
-        config = {"configurable": {"thread_id": request.session_id}, "recursion_limit": 25}
+        # Checkpointer manages history per thread_id — scope with user_id
+        config = {
+            "configurable": {
+                "thread_id": f"{user['id']}:{request.session_id}",
+                "user_id": user["id"],
+                "user_role": user["role"],
+            },
+            "recursion_limit": 25,
+        }
 
         try:
             async with asyncio.timeout(90):
@@ -410,7 +454,6 @@ async def chat(request: ChatRequest):
         # Run full verification pipeline (skip for no-tool queries like greetings)
         verification_details: dict[str, str] = {}
         if tool_calls_made:
-            client = _get_client()
             pipeline_result = await run_verification_pipeline(
                 response_text=ai_response,
                 tool_outputs=tool_outputs,
