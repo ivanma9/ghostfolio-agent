@@ -227,11 +227,15 @@ class AlertEngine:
             logger.warning("alert_holdings_fetch_failed", error=str(exc))
             return []
 
-        holdings: dict = holdings_resp.get("holdings", {})
-        if not holdings:
+        raw_holdings = holdings_resp.get("holdings", [])
+        if not raw_holdings:
             return []
 
-        symbols = list(holdings.keys())
+        # holdings can be a list of objects or a dict keyed by symbol
+        if isinstance(raw_holdings, list):
+            symbols = [h.get("symbol", "") for h in raw_holdings if h.get("symbol")]
+        else:
+            symbols = list(raw_holdings.keys())
         alerts: list[AlertResult] = []
         today = date.today()
 
