@@ -243,7 +243,14 @@ After both agents finish:
    - Add to `create_tools()` function
 
 2. Edit `src/ghostfolio_agent/agent/graph.py`:
-   - Add benchmark_comparison to SYSTEM_PROMPT tool descriptions
+   - Add benchmark_comparison to SYSTEM_PROMPT Available tools list
+   - Add routing rule to Tool routing section:
+     ```
+     - "am I beating the market?", "compare to S&P", "portfolio vs benchmark", "how's the market?",
+       "market trend" → benchmark_comparison ONLY. Do NOT also call portfolio_performance
+       (benchmark_comparison already includes portfolio return data).
+     - "how did my portfolio do?" (no comparison intent) → portfolio_performance ONLY.
+     ```
 
 3. Run full test suite: `uv run pytest tests/unit/ -v`
 
