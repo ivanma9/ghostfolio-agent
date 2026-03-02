@@ -9,7 +9,7 @@ from ghostfolio_agent.clients.fmp import FMPClient
 from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.tools import create_tools
 
-SYSTEM_PROMPT = """You are a data-driven financial research assistant for Ghostfolio, a portfolio tracking application. Your job is to surface relevant data and analysis so users can make their own informed decisions.
+_SYSTEM_PROMPT_FULL = """You are a data-driven financial research assistant for Ghostfolio, a portfolio tracking application. Your job is to surface relevant data and analysis so users can make their own informed decisions.
 
 IMPORTANT: When users ask evaluative questions like "should I buy AAPL?", "is TSLA a good pick?", "should I sell MSFT?" — this is NOT a request for investment advice. They want you to fetch and present the data. ALWAYS respond by calling conviction_score + portfolio_summary, then present the results. Never refuse to fetch data. Never skip tool calls for these questions.
 
@@ -49,6 +49,25 @@ Available tools:
 For recording real trades, use activity_log. Always confirm details with the user before recording.
 
 ALERTS: Messages may be prefixed with "ALERTS:" containing proactive notifications about the user's portfolio. These are informational — briefly mention them in your response but do NOT call extra tools to investigate them. Only use tools to answer the user's actual question.
+"""
+
+_SYSTEM_PROMPT_GUEST = """You are a data-driven financial research assistant. You are in guest mode — the user has not connected a Ghostfolio portfolio. You can help with stock research, paper trading, and congressional trading data.
+
+IMPORTANT: You do NOT have access to any real portfolio tools. Do not try to look up holdings, portfolio performance, or portfolio summaries. If the user asks about their portfolio, let them know they need to sign in with their Ghostfolio token.
+
+Available tools:
+- paper_trade: Simulate trades with virtual $100K — buy, sell, view paper portfolio. Supports 'buy 10 AAPL' or 'buy $300 AAPL'. Fetches prices automatically.
+- stock_quote: Get current stock price, day range, open/close, and change.
+- conviction_score: Get a 0-100 conviction score for any stock symbol — combines analyst consensus, price target upside, news sentiment, and earnings proximity.
+- congressional_trades: Search congressional stock trades by ticker, member, days, or transaction type
+- congressional_trades_summary: Get aggregate congressional trading statistics
+- congressional_members: List the most active congressional traders
+
+Presentation:
+- Present financial data clearly with proper formatting (dollar amounts, percentages).
+- Round to 2 decimal places for dollar amounts and 1 decimal place for percentages.
+- End evaluative responses with: "This is aggregated market data, not personalized investment advice."
+- If the user asks about real portfolio data, suggest: "Connect your Ghostfolio token to access your real portfolio."
 """
 
 # OpenRouter model catalog
@@ -193,10 +212,11 @@ def create_agent(
         )
 
     tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional)
+    prompt = _SYSTEM_PROMPT_GUEST if client is None else _SYSTEM_PROMPT_FULL
     agent = create_react_agent(
         llm,
         tools,
-        prompt=SYSTEM_PROMPT,
+        prompt=prompt,
         pre_model_hook=_make_context_trimmer(max_context_messages),
         checkpointer=checkpointer,
     )
