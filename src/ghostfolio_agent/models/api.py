@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +16,13 @@ class Citation(BaseModel):
     source_detail: str = Field(
         default="", description="Specific detail from the tool result supporting the claim"
     )
+
+
+class AlertItem(BaseModel):
+    symbol: str = Field(..., description="Ticker symbol")
+    condition: str = Field(..., description="Alert condition key e.g. earnings_proximity")
+    message: str = Field(..., description="Human-readable alert message")
+    severity: Literal["warning", "critical"] = Field(..., description="Alert severity level")
 
 
 class AgentStructuredResponse(BaseModel):
@@ -43,6 +52,9 @@ class ChatResponse(BaseModel):
     )
     data_sources: list[str] = Field(
         default_factory=list, description="3rd-party data sources used in this response"
+    )
+    alerts: list[AlertItem] = Field(
+        default_factory=list, description="Structured alerts fired during this request"
     )
 
 
