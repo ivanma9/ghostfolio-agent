@@ -100,11 +100,19 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPa
           <TopHoldings holdings={holdings} onHoldingClick={onHoldingClick} />
         </section>
 
-        {/* Guest CTA when no portfolio */}
-        {isGuest && !isPaperTrading && holdings.length === 0 && !isLoading && (
-          <section className="bg-slate-50 rounded-xl p-4 text-center">
-            <p className="text-sm text-slate-600 font-medium">No portfolio connected</p>
-            <p className="text-xs text-slate-400 mt-1">Enable paper trading to get started</p>
+        {/* Guest CTA to connect portfolio */}
+        {isGuest && (
+          <section className="bg-indigo-50/60 rounded-xl p-4 border border-indigo-100">
+            <p className="text-sm text-indigo-900 font-medium">Connect your portfolio</p>
+            <p className="text-xs text-indigo-600/70 mt-1">
+              Sign in with your Ghostfolio token to view your real portfolio and get personalized insights.
+            </p>
+            <button
+              onClick={onLogout}
+              className="mt-3 w-full text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-indigo-200 rounded-lg py-1.5 transition-colors"
+            >
+              Sign in with token
+            </button>
           </section>
         )}
 
