@@ -28,14 +28,15 @@ def create_tools(
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
     congressional: CongressionalClient | None = None,
+    guest: bool = False,
 ) -> list:
-    """Create agent tools. When client is None (guest mode), only include guest-safe tools."""
-    if client is None:
+    """Create agent tools. When guest=True, only include guest-safe tools."""
+    if guest:
         # Guest mode — only tools that don't require a Ghostfolio portfolio
         tools = []
 
-        # paper_trade works without a Ghostfolio client (uses local file/DB)
-        tools.append(create_paper_trade_tool(client))
+        if client is not None:
+            tools.append(create_paper_trade_tool(client))
 
         if finnhub is not None:
             tools.append(create_stock_quote_tool(client, finnhub=finnhub))

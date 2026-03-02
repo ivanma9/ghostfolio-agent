@@ -191,6 +191,7 @@ def create_agent(
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
     congressional: CongressionalClient | None = None,
+    guest: bool = False,
 ):
     """Create a LangGraph agent with Ghostfolio tools."""
     if model_name in OPENAI_DIRECT_MODELS:
@@ -211,8 +212,8 @@ def create_agent(
             request_timeout=60,
         )
 
-    tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional)
-    prompt = _SYSTEM_PROMPT_GUEST if client is None else _SYSTEM_PROMPT_FULL
+    tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional, guest=guest)
+    prompt = _SYSTEM_PROMPT_GUEST if guest else _SYSTEM_PROMPT_FULL
     agent = create_react_agent(
         llm,
         tools,

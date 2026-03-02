@@ -126,9 +126,10 @@ async def _require_user(authorization: str | None = Header(None)) -> dict:
 
 
 async def _get_user_client(user: dict) -> GhostfolioClient | None:
-    """Get GhostfolioClient for the given user. Returns None for guests."""
+    """Get GhostfolioClient for the given user. Guests get the shared client for price lookups."""
     if user["role"] == "guest":
-        return None
+        # Guests need the client for paper_trade price lookups and stock_quote
+        return _get_client()
     if user["id"] == "default":
         # Auth disabled — use env token
         return _get_client()
@@ -140,7 +141,7 @@ async def _get_user_client(user: dict) -> GhostfolioClient | None:
     return GhostfolioClient(base_url=settings.ghostfolio_base_url, access_token=token)
 
 
-async def _create_agent_for_request(model_name: str, client: GhostfolioClient | None):
+async def _create_agent_for_request(model_name: str, client: GhostfolioClient | None, guest: bool = False):
     """Create a fresh agent for the given user's client. Not cached — each user gets their own."""
     settings = get_settings()
     checkpointer = await _get_checkpointer()
@@ -155,6 +156,7 @@ async def _create_agent_for_request(model_name: str, client: GhostfolioClient | 
         alpha_vantage=_get_alpha_vantage(),
         fmp=_get_fmp(),
         congressional=_get_congressional(),
+        guest=guest,
     )
 
 
@@ -338,7 +340,7 @@ async def chat(request: ChatRequest, user: dict = Depends(_require_user)):
     try:
         model = request.model or DEFAULT_MODEL
         client = await _get_user_client(user)
-        agent = await _create_agent_for_request(model, client)
+        agent = await _create_agent_for_request(model, client, guest=user["role"] == "guest")
 
         # Wrap message with paper trading instruction if enabled
         content = request.message
