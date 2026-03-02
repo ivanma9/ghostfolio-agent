@@ -8,16 +8,19 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.tools.conviction_score import (
     compute_analyst_score,
     compute_price_target_score,
     compute_sentiment_score,
     compute_earnings_score,
+    compute_congressional_score,
     compute_composite,
     score_to_label,
     ANALYST_WEIGHT,
     PRICE_TARGET_WEIGHT,
     SENTIMENT_WEIGHT,
+    CONGRESSIONAL_WEIGHT,
     EARNINGS_WEIGHT,
 )
 
@@ -133,21 +136,41 @@ class AlertEngine:
             f" ({bullish} of {total} analysts bullish) — monitor closely"
         )
 
+    def _check_congressional_trade(
+        self,
+        symbol: str,
+        summary_data: dict | None,
+    ) -> str | None:
+        """Alert if any congressional trades in last 3 days for a held symbol."""
+        if not summary_data:
+            return None
+        total = summary_data.get("total_trades", 0)
+        if total == 0:
+            return None
+        buys = summary_data.get("buys", 0)
+        sells = summary_data.get("sells", 0)
+        sentiment = summary_data.get("sentiment", "N/A")
+        return (
+            f"{symbol} has {total} congressional trades in the last 3 days"
+            f" ({buys} buys, {sells} sells) — {sentiment}"
+        )
+
     async def check_alerts(
         self,
         client: GhostfolioClient,
         finnhub: FinnhubClient | None = None,
         alpha_vantage: AlphaVantageClient | None = None,
         fmp: FMPClient | None = None,
+        congressional: CongressionalClient | None = None,
     ) -> list[str]:
         """Run two-phase alert checks across all portfolio holdings.
 
-        Phase 1: parallel quote + earnings fetch for all symbols (Finnhub).
+        Phase 1: parallel quote + earnings + congressional fetch for all symbols.
         Phase 2: for flagged symbols only, fetch analyst/sentiment/price-target data.
         Cooldown suppresses repeat alerts within COOLDOWN_TTL seconds.
         """
         # Short-circuit if no external clients provided
-        if finnhub is None and alpha_vantage is None and fmp is None:
+        if finnhub is None and alpha_vantage is None and fmp is None and congressional is None:
             return []
 
         # Fetch holdings
@@ -166,30 +189,35 @@ class AlertEngine:
         today = date.today()
 
         # ------------------------------------------------------------------
-        # Phase 1: parallel quote + earnings for all symbols
+        # Phase 1: parallel quote + earnings + congressional for all symbols
         # ------------------------------------------------------------------
         phase1_tasks: list = []
-        if finnhub is not None:
-            for sym in symbols:
-                phase1_tasks.append(_safe_fetch(finnhub.get_quote(sym), f"quote:{sym}"))
-                phase1_tasks.append(
-                    _safe_fetch(finnhub.get_earnings_calendar(sym), f"earnings:{sym}")
-                )
-            phase1_results = await asyncio.gather(*phase1_tasks)
-        else:
-            phase1_results = []
+        phase1_meta: list[tuple[str, str]] = []  # (symbol, data_type)
 
-        # Unpack phase 1 results (pairs: quote, earnings per symbol)
-        quotes: dict[str, dict | None] = {}
-        earnings_map: dict[str, list | None] = {}
-        if finnhub is not None:
-            for i, sym in enumerate(symbols):
-                quotes[sym] = phase1_results[i * 2]
-                earnings_map[sym] = phase1_results[i * 2 + 1]
-        else:
-            for sym in symbols:
-                quotes[sym] = None
-                earnings_map[sym] = None
+        for sym in symbols:
+            if finnhub is not None:
+                phase1_tasks.append(_safe_fetch(finnhub.get_quote(sym), f"quote:{sym}"))
+                phase1_meta.append((sym, "quote"))
+                phase1_tasks.append(_safe_fetch(finnhub.get_earnings_calendar(sym), f"earnings:{sym}"))
+                phase1_meta.append((sym, "earnings"))
+            if congressional is not None:
+                phase1_tasks.append(_safe_fetch(congressional.get_trades_summary(ticker=sym, days=3), f"cong:{sym}"))
+                phase1_meta.append((sym, "congressional"))
+
+        phase1_results = await asyncio.gather(*phase1_tasks) if phase1_tasks else []
+
+        # Unpack phase 1 results into per-symbol maps
+        quotes: dict[str, dict | None] = {sym: None for sym in symbols}
+        earnings_map: dict[str, list | None] = {sym: None for sym in symbols}
+        congressional_map: dict[str, dict | None] = {sym: None for sym in symbols}
+
+        for (sym, data_type), result in zip(phase1_meta, phase1_results):
+            if data_type == "quote":
+                quotes[sym] = result
+            elif data_type == "earnings":
+                earnings_map[sym] = result
+            elif data_type == "congressional":
+                congressional_map[sym] = result
 
         # Evaluate phase 1 conditions; collect flagged symbols for phase 2
         flagged_symbols: set[str] = set()
@@ -205,6 +233,13 @@ class AlertEngine:
             key = f"{sym}:big_mover"
             if big_mover_result and self._is_cooled_down(key):
                 alerts.append(big_mover_result)
+                self._record(key)
+                flagged_symbols.add(sym)
+
+            congressional_result = self._check_congressional_trade(sym, congressional_map.get(sym))
+            key = f"{sym}:congressional_trade"
+            if congressional_result and self._is_cooled_down(key):
+                alerts.append(congressional_result)
                 self._record(key)
                 flagged_symbols.add(sym)
 
@@ -274,6 +309,7 @@ class AlertEngine:
                 news_data=news_map.get(sym),
                 earnings_data=earnings_map.get(sym),
                 market_price=market_price,
+                congressional_data=congressional_map.get(sym),
             )
             key = f"{sym}:low_conviction"
             if conviction_result and self._is_cooled_down(key):
@@ -290,6 +326,7 @@ class AlertEngine:
         news_data: list[dict] | None,
         earnings_data: list[dict] | None,
         market_price: float,
+        congressional_data: dict | None = None,
     ) -> str | None:
         """Alert if composite conviction score < 40."""
         components = []
@@ -305,6 +342,10 @@ class AlertEngine:
         sent_score, sent_expl = compute_sentiment_score(news_data)
         if sent_score is not None:
             components.append(("sentiment", sent_score, sent_expl, SENTIMENT_WEIGHT))
+
+        cong_score, cong_expl = compute_congressional_score(congressional_data)
+        if cong_score is not None:
+            components.append(("congressional", cong_score, cong_expl, CONGRESSIONAL_WEIGHT))
 
         earn_score, earn_expl = compute_earnings_score(earnings_data)
         components.append(("earnings", earn_score, earn_expl, EARNINGS_WEIGHT))

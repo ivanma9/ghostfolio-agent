@@ -10,16 +10,19 @@ from ghostfolio_agent.tools.cache import ttl_cache
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.tools.conviction_score import (
     compute_analyst_score,
     compute_price_target_score,
     compute_sentiment_score,
     compute_earnings_score,
+    compute_congressional_score,
     compute_composite,
     score_to_label,
     ANALYST_WEIGHT,
     PRICE_TARGET_WEIGHT,
     SENTIMENT_WEIGHT,
+    CONGRESSIONAL_WEIGHT,
     EARNINGS_WEIGHT,
 )
 from ghostfolio_agent.utils import safe_fetch
@@ -45,6 +48,7 @@ def generate_action_items(
     market_signals: list[dict],
     earnings_watch: list[dict],
     top_movers: list[dict],
+    congressional_watch: list[dict] | None = None,
 ) -> list[str]:
     """Generate natural language action items from notable flags."""
     items: list[str] = []
@@ -82,6 +86,17 @@ def generate_action_items(
             items.append(
                 f"{mover['symbol']} up {mover['daily_change']:.1f}% today — momentum may continue"
             )
+
+    if congressional_watch:
+        for cw in congressional_watch:
+            sentiment = cw.get("sentiment", "N/A")
+            buys = cw.get("buys", 0)
+            sells = cw.get("sells", 0)
+            sym = cw["symbol"]
+            if sells > buys:
+                items.append(f"{sym} seeing congressional selling ({sells} sells vs {buys} buys) — monitor closely")
+            elif buys > sells:
+                items.append(f"{sym} seeing congressional buying ({buys} buys vs {sells} sells)")
 
     return items
 
@@ -124,6 +139,7 @@ def create_morning_briefing_tool(
     finnhub: FinnhubClient | None = None,
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
+    congressional: CongressionalClient | None = None,
 ):
     @tool
     @ttl_cache(ttl=1800)
@@ -244,7 +260,7 @@ def create_morning_briefing_tool(
         notable_symbols = set(top_mover_symbols) | earnings_flagged_symbols
 
         market_signals = []
-        if notable_symbols and (alpha_vantage or finnhub or fmp):
+        if notable_symbols and (alpha_vantage or finnhub or fmp or congressional):
             enrich_tasks = {}
             for sym in notable_symbols:
                 sym_tasks = {}
@@ -254,6 +270,8 @@ def create_morning_briefing_tool(
                     sym_tasks["analyst"] = safe_fetch(finnhub.get_analyst_recommendations(sym), f"analyst_{sym}")
                 if fmp:
                     sym_tasks["pt"] = safe_fetch(fmp.get_price_target_consensus(sym), f"pt_{sym}")
+                if congressional:
+                    sym_tasks["congressional"] = safe_fetch(congressional.get_trades_summary(ticker=sym, days=7), f"cong_{sym}")
                 enrich_tasks[sym] = sym_tasks
 
             flat_keys = []
@@ -276,6 +294,9 @@ def create_morning_briefing_tool(
             if any(enriched[sym].get("pt") for sym in notable_symbols):
                 if "FMP" not in sources:
                     sources.append("FMP")
+            if any(enriched[sym].get("congressional") for sym in notable_symbols):
+                if "Congressional Trades" not in sources:
+                    sources.append("Congressional Trades")
 
             for sym in notable_symbols:
                 sym_data = enriched[sym]
@@ -294,6 +315,10 @@ def create_morning_briefing_tool(
                 sent_score, sent_expl = compute_sentiment_score(sym_data.get("news"))
                 if sent_score is not None:
                     components.append(("sentiment", sent_score, sent_expl, SENTIMENT_WEIGHT))
+
+                cong_score, cong_expl = compute_congressional_score(sym_data.get("congressional"))
+                if cong_score is not None:
+                    components.append(("congressional", cong_score, cong_expl, CONGRESSIONAL_WEIGHT))
 
                 earn_score, earn_expl = compute_earnings_score(earnings_data.get(sym))
                 components.append(("earnings", earn_score, earn_expl, EARNINGS_WEIGHT))
@@ -349,6 +374,21 @@ def create_morning_briefing_tool(
                 }
                 market_signals.append(signal)
 
+        # Congressional watch — collect holdings with recent congressional trades
+        congressional_watch: list[dict] = []
+        if notable_symbols and congressional:
+            for sym in notable_symbols:
+                cong_data = enriched.get(sym, {}).get("congressional") if notable_symbols and (alpha_vantage or finnhub or fmp or congressional) else None
+                if cong_data and cong_data.get("total_trades", 0) > 0:
+                    congressional_watch.append({
+                        "symbol": sym,
+                        "name": holdings_map.get(sym, {}).get("name", sym),
+                        "total_trades": cong_data.get("total_trades", 0),
+                        "buys": cong_data.get("buys", 0),
+                        "sells": cong_data.get("sells", 0),
+                        "sentiment": cong_data.get("sentiment", "N/A"),
+                    })
+
         # Macro snapshot
         macro = await _fetch_macro(alpha_vantage)
 
@@ -358,7 +398,7 @@ def create_morning_briefing_tool(
                 sources.append("Alpha Vantage")
 
         # Action items
-        action_items = generate_action_items(market_signals, earnings_watch, top_movers)
+        action_items = generate_action_items(market_signals, earnings_watch, top_movers, congressional_watch)
 
         # Format output
         lines = [
@@ -402,6 +442,17 @@ def create_morning_briefing_tool(
                     lines.append(f"    Flags: {', '.join(s['flags'])}")
         else:
             lines.append("  No notable signals")
+        lines.append("")
+
+        lines.append("Congressional Watch:")
+        if congressional_watch:
+            for cw in congressional_watch:
+                lines.append(
+                    f"  {cw['symbol']} ({cw['name']}): {cw['total_trades']} trades "
+                    f"({cw['buys']} buys, {cw['sells']} sells) — {cw['sentiment']}"
+                )
+        else:
+            lines.append("  No recent congressional trades in notable holdings")
         lines.append("")
 
         lines.append("Macro Snapshot:")

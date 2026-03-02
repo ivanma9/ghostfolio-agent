@@ -8,6 +8,7 @@ from ghostfolio_agent.utils import safe_fetch
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from datetime import date
 
 logger = structlog.get_logger()
@@ -128,6 +129,35 @@ def compute_earnings_score(
     return 75, "No upcoming earnings (stable)"
 
 
+def compute_congressional_score(
+    summary_data: dict | None,
+) -> tuple[int | None, str]:
+    """Score congressional trading sentiment 0-100.
+
+    Maps buy/sell ratio linearly: all buys → 100, all sells → 0, balanced → 50.
+    Requires ≥2 trades for signal, else returns None.
+    """
+    if not summary_data:
+        return None, "No congressional data"
+
+    total = summary_data.get("total_trades", 0)
+    if total < 2:
+        return None, "Too few congressional trades"
+
+    buys = summary_data.get("buys", 0)
+    sells = summary_data.get("sells", 0)
+    trade_sum = buys + sells
+    if trade_sum == 0:
+        return 50, f"{total} trades (no buy/sell breakdown)"
+
+    ratio = buys / trade_sum  # 1.0 = all buys, 0.0 = all sells
+    score = round(ratio * 100)
+    score = max(0, min(100, score))
+
+    explanation = f"{buys} buys, {sells} sells from {summary_data.get('unique_members', '?')} members"
+    return score, explanation
+
+
 def score_to_label(score: int) -> str:
     """Map 0-100 score to conviction label."""
     if score <= 20:
@@ -176,9 +206,10 @@ def compute_composite(
 
 
 # Component weights
-ANALYST_WEIGHT = 40
-PRICE_TARGET_WEIGHT = 30
-SENTIMENT_WEIGHT = 20
+ANALYST_WEIGHT = 35
+PRICE_TARGET_WEIGHT = 25
+SENTIMENT_WEIGHT = 15
+CONGRESSIONAL_WEIGHT = 15
 EARNINGS_WEIGHT = 10
 
 # Display names for output
@@ -186,6 +217,7 @@ COMPONENT_NAMES = {
     "analyst": "Analyst Consensus",
     "price_target": "Price Target Upside",
     "sentiment": "News Sentiment",
+    "congressional": "Congressional Sentiment",
     "earnings": "Earnings Proximity",
 }
 
@@ -194,6 +226,7 @@ def create_conviction_score_tool(
     finnhub: FinnhubClient | None = None,
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
+    congressional: CongressionalClient | None = None,
 ):
     @tool
     @ttl_cache(ttl=300)
@@ -201,7 +234,7 @@ def create_conviction_score_tool(
         """Get a conviction score (0-100) for a stock symbol based on analyst consensus,
         price target upside, news sentiment, and earnings proximity. Use when the user
         asks about signal strength, conviction, or is evaluating a trade decision."""
-        if not finnhub and not alpha_vantage and not fmp:
+        if not finnhub and not alpha_vantage and not fmp and not congressional:
             return "Conviction score is not available — no data sources configured."
 
         # Parallel fetch all data
@@ -223,6 +256,10 @@ def create_conviction_score_tool(
         if fmp:
             tasks.append(safe_fetch(fmp.get_price_target_consensus(symbol), "pt_consensus"))
             task_labels.append("pt_consensus")
+
+        if congressional:
+            tasks.append(safe_fetch(congressional.get_trades_summary(ticker=symbol, days=90), "congressional"))
+            task_labels.append("congressional")
 
         results = await asyncio.gather(*tasks)
         data = dict(zip(task_labels, results))
@@ -255,6 +292,13 @@ def create_conviction_score_tool(
             components.append(("sentiment", sent_score, sent_expl, SENTIMENT_WEIGHT))
         else:
             missing.append("News Sentiment")
+
+        # Congressional
+        cong_score, cong_expl = compute_congressional_score(data.get("congressional"))
+        if cong_score is not None:
+            components.append(("congressional", cong_score, cong_expl, CONGRESSIONAL_WEIGHT))
+        else:
+            missing.append("Congressional Sentiment")
 
         # Earnings (always returns a score)
         earn_score, earn_expl = compute_earnings_score(data.get("earnings"))
@@ -298,6 +342,8 @@ def create_conviction_score_tool(
             data_sources.append("Alpha Vantage")
         if data.get("pt_consensus"):
             data_sources.append("FMP")
+        if data.get("congressional"):
+            data_sources.append("Congressional Trades")
         if data_sources:
             lines.append(f"[DATA_SOURCES: {', '.join(data_sources)}]")
 

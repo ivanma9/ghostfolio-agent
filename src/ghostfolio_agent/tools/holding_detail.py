@@ -6,6 +6,7 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.tools.cache import ttl_cache
 from ghostfolio_agent.utils import safe_fetch
 from ghostfolio_agent.tools.conviction_score import (
@@ -13,10 +14,12 @@ from ghostfolio_agent.tools.conviction_score import (
     compute_price_target_score,
     compute_sentiment_score,
     compute_earnings_score,
+    compute_congressional_score,
     compute_composite,
     ANALYST_WEIGHT,
     PRICE_TARGET_WEIGHT,
     SENTIMENT_WEIGHT,
+    CONGRESSIONAL_WEIGHT,
     EARNINGS_WEIGHT,
 )
 
@@ -95,6 +98,24 @@ def _format_price_targets(consensus: list[dict] | None, summary: list[dict] | No
     return lines
 
 
+def _format_congressional(summary: dict | None) -> list[str]:
+    """Format congressional trading activity summary."""
+    if not summary:
+        return []
+    total = summary.get("total_trades", 0)
+    if total == 0:
+        return []
+    buys = summary.get("buys", 0)
+    sells = summary.get("sells", 0)
+    unique = summary.get("unique_members", 0)
+    sentiment = summary.get("sentiment", "N/A")
+    return [
+        "",
+        "Congressional Activity (90 days):",
+        f"  Trades: {total} ({buys} buys, {sells} sells)  Members: {unique}  Sentiment: {sentiment}",
+    ]
+
+
 def _format_smart_summary(market_price: float, enrichment: dict) -> list[str]:
     """Compute actionable signals from enrichment data and return formatted lines."""
     signals: list[str] = []
@@ -113,6 +134,10 @@ def _format_smart_summary(market_price: float, enrichment: dict) -> list[str]:
     s_score, s_expl = compute_sentiment_score(enrichment.get("news"))
     if s_score is not None:
         conviction_components.append(("sentiment", s_score, s_expl, SENTIMENT_WEIGHT))
+
+    c_score, c_expl = compute_congressional_score(enrichment.get("congressional_summary"))
+    if c_score is not None:
+        conviction_components.append(("congressional", c_score, c_expl, CONGRESSIONAL_WEIGHT))
 
     e_score, e_expl = compute_earnings_score(enrichment.get("earnings"))
     conviction_components.append(("earnings", e_score, e_expl, EARNINGS_WEIGHT))
@@ -197,6 +222,7 @@ def create_holding_detail_tool(
     finnhub: FinnhubClient | None = None,
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
+    congressional: CongressionalClient | None = None,
 ):
     @tool
     @ttl_cache(ttl=300)
@@ -277,6 +303,10 @@ def create_holding_detail_tool(
             enrichment_tasks.append(safe_fetch(fmp.get_price_target_summary(resolved_symbol), "fmp_pt_summary"))
             task_labels.append("pt_summary")
 
+        if congressional:
+            enrichment_tasks.append(safe_fetch(congressional.get_trades_summary(ticker=resolved_symbol, days=90), "congressional_summary"))
+            task_labels.append("congressional_summary")
+
         if enrichment_tasks:
             results = await asyncio.gather(*enrichment_tasks)
             enrichment = dict(zip(task_labels, results))
@@ -285,6 +315,7 @@ def create_holding_detail_tool(
             lines.extend(_format_analyst(enrichment.get("analyst")))
             lines.extend(_format_news_sentiment(enrichment.get("news")))
             lines.extend(_format_price_targets(enrichment.get("pt_consensus"), enrichment.get("pt_summary")))
+            lines.extend(_format_congressional(enrichment.get("congressional_summary")))
             lines.extend(_format_smart_summary(market_price, enrichment))
 
             if enrichment.get("earnings") or enrichment.get("analyst"):
@@ -293,6 +324,8 @@ def create_holding_detail_tool(
                 sources.append("Alpha Vantage")
             if enrichment.get("pt_consensus") or enrichment.get("pt_summary"):
                 sources.append("FMP")
+            if enrichment.get("congressional_summary"):
+                sources.append("Congressional Trades")
 
         lines.append(f"[DATA_SOURCES: {', '.join(sources)}]")
         return "\n".join(lines)

@@ -6,6 +6,7 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.tools import create_tools
 
 SYSTEM_PROMPT = """You are a helpful financial assistant for Ghostfolio, a portfolio tracking application. You help users understand their investment portfolio, transactions, and market data.
@@ -35,6 +36,9 @@ Available tools:
 - stock_quote: Get current stock price, day range, open/close, and change. Use when user asks "what's the price of X?" or wants to check a price before trading.
 - conviction_score: Get a 0-100 conviction score for any stock symbol — combines analyst consensus, price target upside, news sentiment, and earnings proximity into one composite signal with full breakdown. Use when the user asks about signal strength, conviction, or is evaluating a trade decision.
 - morning_briefing: Get a daily morning briefing — portfolio overview, top movers, upcoming earnings, market signals, macro snapshot, and action items. Use when the user asks for a morning briefing, daily update, or wants to know what's happening today.
+- congressional_trades: Search congressional stock trades by ticker, member, days, or transaction type
+- congressional_trades_summary: Get aggregate congressional trading statistics — buy/sell counts, sentiment
+- congressional_members: List the most active congressional traders with trade counts
 - activity_log: Record real portfolio activities (buy, sell, dividend) in Ghostfolio
 
 For recording real trades, use activity_log. Always confirm details with the user before recording.
@@ -164,6 +168,7 @@ def create_agent(
     finnhub: FinnhubClient | None = None,
     alpha_vantage: AlphaVantageClient | None = None,
     fmp: FMPClient | None = None,
+    congressional: CongressionalClient | None = None,
 ):
     """Create a LangGraph agent with Ghostfolio tools."""
     if model_name in OPENAI_DIRECT_MODELS:
@@ -184,7 +189,7 @@ def create_agent(
             request_timeout=60,
         )
 
-    tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp)
+    tools = create_tools(client, finnhub=finnhub, alpha_vantage=alpha_vantage, fmp=fmp, congressional=congressional)
     agent = create_react_agent(
         llm,
         tools,

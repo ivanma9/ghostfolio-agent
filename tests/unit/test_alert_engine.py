@@ -321,3 +321,92 @@ class TestCheckAlerts:
         engine = AlertEngine()
         alerts = await engine.check_alerts(client, finnhub=mock_finnhub)
         assert alerts == []
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — Congressional Trade Alert
+# ---------------------------------------------------------------------------
+
+
+class TestCheckCongressionalTrade:
+    def setup_method(self):
+        self.engine = AlertEngine()
+
+    def test_trades_exist_triggers(self):
+        data = {"total_trades": 3, "buys": 2, "sells": 1, "sentiment": "Bullish"}
+        result = self.engine._check_congressional_trade("AAPL", data)
+        assert result is not None
+        assert "AAPL" in result
+        assert "3 congressional trades" in result
+        assert "2 buys" in result
+        assert "1 sells" in result
+
+    def test_no_trades_returns_none(self):
+        data = {"total_trades": 0, "buys": 0, "sells": 0, "sentiment": "N/A"}
+        result = self.engine._check_congressional_trade("AAPL", data)
+        assert result is None
+
+    def test_none_data_returns_none(self):
+        result = self.engine._check_congressional_trade("AAPL", None)
+        assert result is None
+
+
+class TestCheckAlertsWithCongressional:
+    @pytest.mark.asyncio
+    async def test_congressional_alert_fires(self, mock_ghostfolio):
+        from ghostfolio_agent.clients.congressional import CongressionalClient
+        congressional = MagicMock(spec=CongressionalClient)
+
+        async def mock_summary(ticker=None, member=None, days=None):
+            if ticker == "AAPL":
+                return {"total_trades": 2, "buys": 1, "sells": 1, "sentiment": "Neutral"}
+            return {"total_trades": 0}
+
+        congressional.get_trades_summary = MagicMock(side_effect=mock_summary)
+
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
+        alert_text = "\n".join(alerts)
+        assert "AAPL" in alert_text
+        assert "congressional" in alert_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_congressional_cooldown(self, mock_ghostfolio):
+        from ghostfolio_agent.clients.congressional import CongressionalClient
+        congressional = MagicMock(spec=CongressionalClient)
+
+        async def mock_summary(ticker=None, member=None, days=None):
+            return {"total_trades": 2, "buys": 1, "sells": 1, "sentiment": "Neutral"}
+
+        congressional.get_trades_summary = MagicMock(side_effect=mock_summary)
+
+        engine = AlertEngine()
+        alerts1 = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
+        cong_alerts = [a for a in alerts1 if "congressional" in a.lower()]
+        assert len(cong_alerts) > 0
+
+        alerts2 = await engine.check_alerts(mock_ghostfolio, congressional=congressional)
+        cong_alerts2 = [a for a in alerts2 if "congressional" in a.lower()]
+        assert len(cong_alerts2) == 0  # suppressed by cooldown
+
+    @pytest.mark.asyncio
+    async def test_congressional_with_finnhub(self, mock_ghostfolio, mock_finnhub):
+        """Congressional + Finnhub both fire alerts."""
+        from ghostfolio_agent.clients.congressional import CongressionalClient
+        congressional = MagicMock(spec=CongressionalClient)
+
+        async def mock_summary(ticker=None, member=None, days=None):
+            if ticker == "TSLA":
+                return {"total_trades": 3, "buys": 0, "sells": 3, "sentiment": "Bearish"}
+            return {"total_trades": 0}
+
+        congressional.get_trades_summary = MagicMock(side_effect=mock_summary)
+
+        engine = AlertEngine()
+        alerts = await engine.check_alerts(mock_ghostfolio, finnhub=mock_finnhub, congressional=congressional)
+        alert_text = "\n".join(alerts)
+        # Finnhub alerts (big mover AAPL, earnings TSLA)
+        assert "AAPL" in alert_text
+        # Congressional alert for TSLA
+        assert "TSLA" in alert_text
+        assert "congressional" in alert_text.lower()

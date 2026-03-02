@@ -19,6 +19,7 @@ from ghostfolio_agent.clients.ghostfolio import GhostfolioClient
 from ghostfolio_agent.clients.finnhub import FinnhubClient
 from ghostfolio_agent.clients.alpha_vantage import AlphaVantageClient
 from ghostfolio_agent.clients.fmp import FMPClient
+from ghostfolio_agent.clients.congressional import CongressionalClient
 from ghostfolio_agent.config import get_settings
 from ghostfolio_agent.verification.pipeline import run_verification_pipeline
 from ghostfolio_agent.alerts.engine import AlertEngine
@@ -71,6 +72,7 @@ async def _get_agent(model_name: str = DEFAULT_MODEL):
         finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
         alpha_vantage = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
         fmp = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
+        congressional = CongressionalClient(base_url=settings.congressional_api_url) if settings.congressional_api_url else None
         checkpointer = await _get_checkpointer()
         _agents[model_name] = create_agent(
             _get_client(),
@@ -82,6 +84,7 @@ async def _get_agent(model_name: str = DEFAULT_MODEL):
             finnhub=finnhub,
             alpha_vantage=alpha_vantage,
             fmp=fmp,
+            congressional=congressional,
         )
     return _agents[model_name]
 
@@ -276,10 +279,11 @@ async def chat(request: ChatRequest):
         finnhub = FinnhubClient(api_key=settings.finnhub_api_key) if settings.finnhub_api_key else None
         alpha_vantage_client = AlphaVantageClient(api_key=settings.alpha_vantage_api_key) if settings.alpha_vantage_api_key else None
         fmp_client = FMPClient(api_key=settings.fmp_api_key) if settings.fmp_api_key else None
+        congressional_client = CongressionalClient(base_url=settings.congressional_api_url) if settings.congressional_api_url else None
 
         try:
             alerts = await alert_engine.check_alerts(
-                _get_client(), finnhub=finnhub, alpha_vantage=alpha_vantage_client, fmp=fmp_client
+                _get_client(), finnhub=finnhub, alpha_vantage=alpha_vantage_client, fmp=fmp_client, congressional=congressional_client
             )
         except Exception as e:
             logger.warning("alert_check_failed", error=str(e))

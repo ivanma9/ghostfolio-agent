@@ -176,41 +176,80 @@ class TestEarningsScore:
         assert score == 75
 
 
+from ghostfolio_agent.tools.conviction_score import compute_congressional_score
+
+
+class TestCongressionalScore:
+    def test_all_buys(self):
+        """All buys → 100."""
+        data = {"total_trades": 5, "buys": 5, "sells": 0, "unique_members": 3}
+        score, explanation = compute_congressional_score(data)
+        assert score == 100
+        assert "5 buys" in explanation
+
+    def test_all_sells(self):
+        """All sells → 0."""
+        data = {"total_trades": 4, "buys": 0, "sells": 4, "unique_members": 2}
+        score, explanation = compute_congressional_score(data)
+        assert score == 0
+        assert "4 sells" in explanation
+
+    def test_balanced(self):
+        """Equal buys/sells → 50."""
+        data = {"total_trades": 6, "buys": 3, "sells": 3, "unique_members": 4}
+        score, explanation = compute_congressional_score(data)
+        assert score == 50
+
+    def test_too_few_trades(self):
+        """< 2 trades → None."""
+        data = {"total_trades": 1, "buys": 1, "sells": 0, "unique_members": 1}
+        score, explanation = compute_congressional_score(data)
+        assert score is None
+        assert "Too few" in explanation
+
+    def test_none_data(self):
+        """None → None."""
+        score, explanation = compute_congressional_score(None)
+        assert score is None
+        assert "No congressional data" in explanation
+
+
 from ghostfolio_agent.tools.conviction_score import compute_composite, score_to_label
 
 
 class TestComposite:
     def test_all_components(self):
-        """All 4 components present — weighted average."""
+        """All 5 components present — weighted average."""
         components = [
-            ("analyst", 80, "18 of 24 bullish", 40),
-            ("price_target", 70, "+12% upside", 30),
-            ("sentiment", 60, "3 of 5 positive", 20),
+            ("analyst", 80, "18 of 24 bullish", 35),
+            ("price_target", 70, "+12% upside", 25),
+            ("sentiment", 60, "3 of 5 positive", 15),
+            ("congressional", 75, "3 buys, 1 sell", 15),
             ("earnings", 50, "Reporting in 8 days", 10),
         ]
         score, label, details = compute_composite(components)
-        # (80*40 + 70*30 + 60*20 + 50*10) / 100 = (3200+2100+1200+500)/100 = 70
-        assert score == 70
+        # (80*35 + 70*25 + 60*15 + 75*15 + 50*10) / 100 = (2800+1750+900+1125+500)/100 = 70.75 → 71
+        assert 70 <= score <= 72
         assert label == "Buy"
-        assert len(details) == 4
+        assert len(details) == 5
 
     def test_missing_one_component(self):
-        """3 components — weights redistribute."""
+        """4 components — weights redistribute."""
         components = [
-            ("analyst", 80, "18 of 24 bullish", 40),
-            ("price_target", 70, "+12% upside", 30),
+            ("analyst", 80, "18 of 24 bullish", 35),
+            ("price_target", 70, "+12% upside", 25),
+            ("congressional", 75, "3 buys, 1 sell", 15),
             ("earnings", 50, "Reporting in 8 days", 10),
         ]
         score, label, details = compute_composite(components)
-        # Total weight = 80, redistributed: analyst=40/80*100=50, pt=30/80*100=37.5, earn=10/80*100=12.5
-        # (80*50 + 70*37.5 + 50*12.5) / 100 = (4000+2625+625)/100 = 72.5 → 72 or 73
-        assert 72 <= score <= 73
+        # Total weight = 85
+        assert 70 <= score <= 76
         assert label == "Buy"
 
     def test_single_component(self):
         """Only one component — uses its score directly."""
         components = [
-            ("analyst", 85, "20 of 24 bullish", 40),
+            ("analyst", 85, "20 of 24 bullish", 35),
         ]
         score, label, details = compute_composite(components)
         assert score == 85

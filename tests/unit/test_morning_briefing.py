@@ -175,6 +175,28 @@ def fmp_client():
     return client
 
 
+CONG_SUMMARY_AAPL = {
+    "ticker": "AAPL",
+    "total_trades": 3,
+    "buys": 1,
+    "sells": 2,
+    "unique_members": 2,
+    "sentiment": "Bearish",
+}
+
+
+@pytest.fixture
+def congressional_client():
+    from ghostfolio_agent.clients.congressional import CongressionalClient
+    client = MagicMock(spec=CongressionalClient)
+
+    async def mock_summary(ticker=None, member=None, days=None):
+        return {"AAPL": CONG_SUMMARY_AAPL}.get(ticker, {"total_trades": 0})
+
+    client.get_trades_summary = MagicMock(side_effect=mock_summary)
+    return client
+
+
 class TestMorningBriefingTool:
     @pytest.fixture(autouse=True)
     def reset_macro_cache(self):
@@ -244,3 +266,62 @@ class TestMorningBriefingTool:
         alpha_vantage_client.get_fed_funds_rate.assert_not_called()
         alpha_vantage_client.get_cpi.assert_not_called()
         alpha_vantage_client.get_treasury_yield.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_congressional_watch_section(self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client, congressional_client):
+        """Congressional client provided → 'Congressional Watch' section appears with trade data."""
+        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
+
+        tool = create_morning_briefing_tool(
+            ghostfolio_client,
+            finnhub=finnhub_client,
+            alpha_vantage=alpha_vantage_client,
+            fmp=fmp_client,
+            congressional=congressional_client,
+        )
+        result = await tool.ainvoke({})
+
+        assert "Congressional Watch" in result
+        # AAPL is a notable symbol (top mover with -5%) so should appear
+        assert "AAPL" in result
+
+    @pytest.mark.asyncio
+    async def test_congressional_action_items(self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client, congressional_client):
+        """Congressional selling generates action items."""
+        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
+
+        tool = create_morning_briefing_tool(
+            ghostfolio_client,
+            finnhub=finnhub_client,
+            alpha_vantage=alpha_vantage_client,
+            fmp=fmp_client,
+            congressional=congressional_client,
+        )
+        result = await tool.ainvoke({})
+
+        assert "congressional selling" in result.lower() or "congressional buying" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_no_congressional_without_client(self, ghostfolio_client, finnhub_client, alpha_vantage_client, fmp_client):
+        """Without congressional client → 'No recent congressional trades'."""
+        from ghostfolio_agent.tools.morning_briefing import create_morning_briefing_tool
+
+        tool = create_morning_briefing_tool(
+            ghostfolio_client, finnhub=finnhub_client, alpha_vantage=alpha_vantage_client, fmp=fmp_client
+        )
+        result = await tool.ainvoke({})
+
+        assert "Congressional Watch" in result
+        assert "No recent congressional trades" in result
+
+
+class TestGenerateActionItemsCongressional:
+    def test_congressional_selling(self):
+        cw = [{"symbol": "AAPL", "buys": 1, "sells": 3, "sentiment": "Bearish"}]
+        items = generate_action_items([], [], [], congressional_watch=cw)
+        assert any("AAPL" in item and "selling" in item.lower() for item in items)
+
+    def test_congressional_buying(self):
+        cw = [{"symbol": "TSLA", "buys": 5, "sells": 1, "sentiment": "Bullish"}]
+        items = generate_action_items([], [], [], congressional_watch=cw)
+        assert any("TSLA" in item and "buying" in item.lower() for item in items)

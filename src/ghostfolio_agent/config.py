@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     finnhub_api_key: str = ""
     alpha_vantage_api_key: str = ""
     fmp_api_key: str = ""
+    congressional_api_url: str = ""  # Railway private networking URL
 
 
 def get_settings() -> Settings:

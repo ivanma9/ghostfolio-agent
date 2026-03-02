@@ -87,11 +87,28 @@ def alpha_vantage_client():
     return client
 
 
+CONGRESSIONAL_SUMMARY_MOCK = {
+    "ticker": "AAPL",
+    "total_trades": 5,
+    "buys": 3,
+    "sells": 2,
+    "unique_members": 4,
+    "sentiment": "Bullish",
+}
+
+
 @pytest.fixture
 def fmp_client():
     client = MagicMock()
     client.get_price_target_consensus = AsyncMock(return_value=PT_CONSENSUS_MOCK)
     client.get_price_target_summary = AsyncMock(return_value=PT_SUMMARY_MOCK)
+    return client
+
+
+@pytest.fixture
+def congressional_client():
+    client = MagicMock()
+    client.get_trades_summary = AsyncMock(return_value=CONGRESSIONAL_SUMMARY_MOCK)
     return client
 
 
@@ -395,3 +412,45 @@ class TestSmartSummary:
         result = await tool.ainvoke({"symbol": "AAPL"})
 
         assert "Conviction Score:" not in result
+
+
+class TestCongressionalEnrichment:
+    @pytest.mark.asyncio
+    async def test_congressional_section_present(self, ghostfolio_client, congressional_client):
+        """Congressional client provided → 'Congressional Activity' section appears."""
+        tool = create_holding_detail_tool(ghostfolio_client, congressional=congressional_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Congressional Activity" in result
+        assert "3 buys" in result
+        assert "2 sells" in result
+        assert "Bullish" in result
+
+    @pytest.mark.asyncio
+    async def test_congressional_data_source_tracked(self, ghostfolio_client, congressional_client):
+        """Congressional data shows in DATA_SOURCES."""
+        tool = create_holding_detail_tool(ghostfolio_client, congressional=congressional_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Congressional Trades" in result
+
+    @pytest.mark.asyncio
+    async def test_congressional_error_graceful(self, ghostfolio_client):
+        """Congressional client errors → section omitted, no crash."""
+        bad_congressional = MagicMock()
+        bad_congressional.get_trades_summary = AsyncMock(side_effect=RuntimeError("down"))
+
+        tool = create_holding_detail_tool(ghostfolio_client, congressional=bad_congressional)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Apple Inc." in result
+        assert "Congressional Activity" not in result
+        assert "down" not in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_congressional_absent_without_client(self, ghostfolio_client):
+        """No congressional client → no congressional section."""
+        tool = create_holding_detail_tool(ghostfolio_client)
+        result = await tool.ainvoke({"symbol": "AAPL"})
+
+        assert "Congressional Activity" not in result
