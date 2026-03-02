@@ -39,6 +39,7 @@ export interface ChatResponse {
   verification_issues: string[]
   verification_details: Record<string, string>
   data_sources: string[]
+  alerts: AlertItem[]
 }
 
 export interface Holding {
@@ -168,6 +169,13 @@ export interface MorningBriefingData {
     cached: boolean
   }
   actionItems: string[]
+}
+
+export interface AlertItem {
+  symbol: string
+  condition: string
+  message: string
+  severity: 'warning' | 'critical'
 }
 
 // Holding Detail (Smart Deep Dive)

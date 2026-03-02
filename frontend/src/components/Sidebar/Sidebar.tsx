@@ -1,7 +1,8 @@
-import type { Holding } from '../../types';
+import type { Holding, AlertItem } from '../../types';
 import { PortfolioValue } from './PortfolioValue';
 import { AllocationChart } from './AllocationChart';
 import { TopHoldings } from './TopHoldings';
+import { AlertsSection } from './AlertsSection';
 
 interface SidebarProps {
   holdings: Holding[];
@@ -11,6 +12,8 @@ interface SidebarProps {
   isPaperTrading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  alerts?: AlertItem[];
+  onHoldingClick?: (symbol: string) => void;
 }
 
 function ChartIcon() {
@@ -31,7 +34,7 @@ function ChartIcon() {
   );
 }
 
-export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false, error, onRetry }: SidebarProps) {
+export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPaperTrading = false, error, onRetry, alerts = [], onHoldingClick }: SidebarProps) {
   return (
     <aside className="w-72 h-full border-r border-gray-100 bg-white overflow-y-auto flex-shrink-0">
       <div className="p-5 space-y-6">
@@ -80,14 +83,21 @@ export function Sidebar({ holdings, portfolioValue, dailyChange, isLoading, isPa
           </section>
         )}
 
+        {/* Alerts Section */}
+        {alerts.length > 0 && (
+          <section>
+            <AlertsSection alerts={alerts} onAlertClick={onHoldingClick} />
+          </section>
+        )}
+
         {/* Allocation Chart */}
         <section>
-          <AllocationChart holdings={holdings} />
+          <AllocationChart holdings={holdings} onHoldingClick={onHoldingClick} />
         </section>
 
         {/* Top Holdings */}
         <section>
-          <TopHoldings holdings={holdings} />
+          <TopHoldings holdings={holdings} onHoldingClick={onHoldingClick} />
         </section>
       </div>
     </aside>

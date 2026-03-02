@@ -28,6 +28,13 @@ function App() {
     [chat.sendMessage, selectedModel, isPaperTrading],
   )
 
+  const handleHoldingClick = useCallback(
+    (symbol: string) => {
+      handleSend(`Tell me about ${symbol}`)
+    },
+    [handleSend],
+  )
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -40,6 +47,8 @@ function App() {
           isPaperTrading={isPaperTrading}
           error={sidebar.error}
           onRetry={sidebar.refresh}
+          alerts={chat.activeAlerts}
+          onHoldingClick={handleHoldingClick}
         />
       </div>
 

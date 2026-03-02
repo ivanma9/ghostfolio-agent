@@ -2,6 +2,7 @@ import type { Holding } from '../../types';
 
 interface TopHoldingsProps {
   holdings: Holding[];
+  onHoldingClick?: (symbol: string) => void;
 }
 
 function formatCurrency(value: number): string {
@@ -13,7 +14,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function TopHoldings({ holdings }: TopHoldingsProps) {
+export function TopHoldings({ holdings, onHoldingClick }: TopHoldingsProps) {
   const top5 = [...(holdings || [])]
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
@@ -30,19 +31,32 @@ export function TopHoldings({ holdings }: TopHoldingsProps) {
         <div className="space-y-0">
           {top5.map((holding, index) => (
             <div key={holding.symbol}>
-              <div className="py-3">
+              <button
+                onClick={() => onHoldingClick?.(holding.symbol)}
+                className="group w-full text-left py-3 pl-2 pr-1 rounded-lg border-l-2 border-transparent hover:bg-slate-50/60 hover:border-indigo-400 transition-all duration-150 ease-out cursor-pointer"
+              >
                 <div className="flex items-start justify-between mb-1.5">
                   <div className="flex-1 min-w-0 pr-3">
-                    <span className="font-bold text-sm text-gray-900">{holding.symbol}</span>
+                    <span className="font-bold text-sm text-gray-900 group-hover:text-indigo-600 transition-colors duration-150">{holding.symbol}</span>
                     <p className="text-xs text-gray-400 truncate mt-0.5">{holding.name}</p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {formatCurrency(holding.value)}
-                    </p>
-                    <p className="text-xs text-indigo-500 font-medium">
-                      {holding.allocation.toFixed(1)}%
-                    </p>
+                  <div className="flex items-center gap-1">
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {formatCurrency(holding.value)}
+                      </p>
+                      <p className="text-xs text-indigo-500 font-medium">
+                        {holding.allocation.toFixed(1)}%
+                      </p>
+                    </div>
+                    <svg
+                      className="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
 
@@ -55,7 +69,7 @@ export function TopHoldings({ holdings }: TopHoldingsProps) {
                     }}
                   />
                 </div>
-              </div>
+              </button>
 
               {index < top5.length - 1 && (
                 <div className="h-px bg-gray-50" />

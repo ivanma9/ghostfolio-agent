@@ -1,8 +1,10 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from 'recharts';
 import type { Holding } from '../../types';
 
 interface AllocationChartProps {
   holdings: Holding[];
+  onHoldingClick?: (symbol: string) => void;
 }
 
 const COLORS = [
@@ -38,7 +40,26 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   return null;
 }
 
-export function AllocationChart({ holdings }: AllocationChartProps) {
+function renderActiveShape(props: any) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 4}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+      />
+    </g>
+  );
+}
+
+export function AllocationChart({ holdings, onHoldingClick }: AllocationChartProps) {
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
+
   if (!holdings || holdings.length === 0) {
     return (
       <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm">
@@ -82,9 +103,18 @@ export function AllocationChart({ holdings }: AllocationChartProps) {
               outerRadius={75}
               paddingAngle={2}
               strokeWidth={0}
+              {...(activeIndex !== undefined ? { activeIndex } : {})}
+              activeShape={renderActiveShape}
+              onMouseEnter={(_: any, index: number) => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(undefined)}
             >
-              {data.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              {data.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={COLORS[index % COLORS.length]}
+                  cursor="pointer"
+                  onClick={() => onHoldingClick?.(entry.name)}
+                />
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
@@ -99,7 +129,11 @@ export function AllocationChart({ holdings }: AllocationChartProps) {
 
       <div className="mt-4 space-y-1.5">
         {holdings.slice(0, 6).map((holding, index) => (
-          <div key={holding.symbol} className="flex items-center justify-between text-xs">
+          <button
+            key={holding.symbol}
+            onClick={() => onHoldingClick?.(holding.symbol)}
+            className="w-full flex items-center justify-between text-xs hover:bg-slate-50/60 rounded px-1 py-0.5 transition-colors duration-150 cursor-pointer"
+          >
             <div className="flex items-center gap-2">
               <span
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -108,7 +142,7 @@ export function AllocationChart({ holdings }: AllocationChartProps) {
               <span className="font-semibold text-gray-700">{holding.symbol}</span>
             </div>
             <span className="text-gray-500">{holding.allocation.toFixed(1)}%</span>
-          </div>
+          </button>
         ))}
         {holdings.length > 6 && (
           <p className="text-xs text-gray-400 pt-1">+{holdings.length - 6} more</p>

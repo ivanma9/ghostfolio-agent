@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { postChat, ChatError } from '../api/chat'
-import type { ChatMessage } from '../types'
+import type { ChatMessage, AlertItem } from '../types'
 
 const SESSION_KEY = 'ghostfolio-session-id'
 
@@ -21,12 +21,14 @@ interface UseChatReturn {
   messages: ChatMessage[]
   isLoading: boolean
   sendMessage: (text: string, model?: string, paperTrading?: boolean) => Promise<void>
+  activeAlerts: AlertItem[]
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { onToolCall } = options
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [activeAlerts, setActiveAlerts] = useState<AlertItem[]>([])
   const sessionIdRef = useRef<string>(getOrCreateSessionId())
 
   const sendMessage = useCallback(
@@ -68,6 +70,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         if (data.tool_calls && data.tool_calls.length > 0) {
           onToolCall?.(data.tool_calls)
         }
+
+        if (data.alerts && data.alerts.length > 0) {
+          setActiveAlerts(prev => {
+            const merged = new Map(prev.map(a => [`${a.symbol}:${a.condition}`, a]))
+            for (const alert of data.alerts) {
+              merged.set(`${alert.symbol}:${alert.condition}`, alert)
+            }
+            return Array.from(merged.values())
+          })
+        }
       } catch (error) {
         const content = error instanceof ChatError
           ? error.message
@@ -89,5 +101,5 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     [isLoading, onToolCall]
   )
 
-  return { messages, isLoading, sendMessage }
+  return { messages, isLoading, sendMessage, activeAlerts }
 }
