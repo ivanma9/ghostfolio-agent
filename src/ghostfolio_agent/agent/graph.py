@@ -61,7 +61,7 @@ AVAILABLE_MODELS = [
     {"id": "gpt-4o-mini-direct", "name": "GPT-4o Mini (Direct)", "provider": "OpenAI Direct"},
 ]
 
-DEFAULT_MODEL = "gpt-4o-mini-direct"
+DEFAULT_MODEL = "openai/gpt-4o-mini"
 
 # Models that go direct to provider instead of through OpenRouter
 OPENAI_DIRECT_MODELS = {"gpt-4o-mini-direct": "gpt-4o-mini"}
