@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     fmp_api_key: str = ""
     congressional_api_url: str = ""  # Railway private networking URL
 
+    # Auth
+    jwt_secret: str = ""
+    encryption_key: str = ""  # Fernet key for encrypting Ghostfolio tokens at rest
+
 
 def get_settings() -> Settings:
     return Settings()
